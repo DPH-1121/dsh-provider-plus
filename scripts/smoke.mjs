@@ -290,10 +290,10 @@ const overridden = await callRoute(routes, '/provider', {
 })
 const cc = overridden.json().providers.find((entry) => entry.provider === 'commandcode')
 assert.equal(cc.origin, 'composition')
-assert.equal(cc.deletable, false)
 const refused = await callRoute(routes, '/provider?provider=commandcode', { method: 'DELETE', url: '/provider?provider=commandcode' })
 assert.equal(refused.status, 409)
-console.log('ok  composition providers are overridable but not deletable')
+assert.match(refused.json().error, /组合层/)
+console.log('ok  a composition-declared provider is refused with an explanation')
 
 /* a catalog route accepts an empty endpoint and empty model list */
 const catalogSave = await callRoute(routes, '/provider', {
