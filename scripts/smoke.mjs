@@ -45,20 +45,7 @@ function makeHarness(initial, composition = {}, directory = []) {
   const routes = new Map()
   const accesses = []
   const settings = {
-    get: (ns) => {
-      if (ns !== 'llm-pi-ai') return store[ns]
-      const override = store['llm-pi-ai']?.providers ?? {}
-      const providers = {}
-      for (const [id, profile] of Object.entries(composition)) providers[id] = { ...profile }
-      for (const [id, profile] of Object.entries(override)) {
-        if (profile === null) {
-          delete providers[id]
-          continue
-        }
-        providers[id] = { ...(providers[id] ?? {}), ...profile }
-      }
-      return { ...(store['llm-pi-ai'] ?? {}), providers }
-    },
+    get: (ns) => store[ns],
     update: async (ns, patch) => {
       accesses.push({ ns, patch })
       store[ns] = deepMerge(store[ns] ?? {}, patch)
