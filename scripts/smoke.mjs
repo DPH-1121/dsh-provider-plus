@@ -40,12 +40,25 @@ function deepMerge(target, patch) {
   return next
 }
 
-function makeHarness(initial, composition = {}) {
+function makeHarness(initial, composition = {}, directory = []) {
   const store = { ...initial }
   const routes = new Map()
   const accesses = []
   const settings = {
-    get: (ns) => store[ns],
+    get: (ns) => {
+      if (ns !== 'llm-pi-ai') return store[ns]
+      const override = store['llm-pi-ai']?.providers ?? {}
+      const providers = {}
+      for (const [id, profile] of Object.entries(composition)) providers[id] = { ...profile }
+      for (const [id, profile] of Object.entries(override)) {
+        if (profile === null) {
+          delete providers[id]
+          continue
+        }
+        providers[id] = { ...(providers[id] ?? {}), ...profile }
+      }
+      return { ...(store['llm-pi-ai'] ?? {}), providers }
+    },
     update: async (ns, patch) => {
       accesses.push({ ns, patch })
       store[ns] = deepMerge(store[ns] ?? {}, patch)
@@ -66,6 +79,9 @@ function makeHarness(initial, composition = {}) {
       },
     ],
   }
+  const llm = {
+    listConfigurableProviders: () => directory,
+  }
   const webServer = {
     register: (route) => {
       routes.set(route.path, route)
@@ -80,11 +96,12 @@ function makeHarness(initial, composition = {}) {
     get: (name) => {
       if (name === 'credentials') return credentials
       if (name === 'configEditor') return configEditor
+      if (name === 'llm') return llm
       return undefined
     },
     logger: { warn() {}, error() {} },
   }
-  return { ctx, routes, store, accesses, configEditor }
+  return { ctx, routes, store, accesses, configEditor, llm }
 }
 
 function fakeReq({ method = 'GET', url = '/', body, address = '127.0.0.1' }) {
@@ -153,7 +170,7 @@ const gatewayURL = `http://127.0.0.1:${gateway.address().port}`
 
 /* ------------------------------------------------------------------ host     */
 
-const { ctx, routes } = makeHarness(
+const { ctx, routes, store } = makeHarness(
   { 'dsh-provider-plus': { usage: {} } },
   {
     commandcode: {
@@ -164,6 +181,10 @@ const { ctx, routes } = makeHarness(
       models: [{ id: 'deepseek/deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash', contextWindow: 1000000, input: ['text', 'image'] }],
     },
   },
+  [
+    { provider: 'commandcode', displayName: 'CommandCode', declared: true },
+    { provider: 'opencode-go', displayName: 'OpenCode Go', declared: false, defaultBaseURL: 'https://opencode.ai/zen/go/v1' },
+  ],
 )
 
 apply(ctx)
@@ -281,11 +302,26 @@ const overridden = await callRoute(routes, '/provider', {
   },
 })
 const cc = overridden.json().providers.find((entry) => entry.provider === 'commandcode')
-assert.equal(cc.origin, 'settings+composition')
+assert.equal(cc.origin, 'composition')
 assert.equal(cc.deletable, false)
 const refused = await callRoute(routes, '/provider?provider=commandcode', { method: 'DELETE', url: '/provider?provider=commandcode' })
 assert.equal(refused.status, 409)
 console.log('ok  composition providers are overridable but not deletable')
+
+/* a catalog route accepts an empty endpoint and empty model list */
+const catalogSave = await callRoute(routes, '/provider', {
+  method: 'POST',
+  body: { provider: 'opencode-go', displayName: 'OpenCode Go', api: '', baseURL: '', apiKeyEnv: 'DEMO_KEY', headers: {}, models: [] },
+})
+assert.equal(catalogSave.status, 200)
+const catalogRow = catalogSave.json().providers.find((entry) => entry.provider === 'opencode-go')
+assert.equal(catalogRow.declaredByCatalog, true)
+assert.equal(catalogRow.baseURL, 'https://opencode.ai/zen/go/v1')
+const catalogOverride = store['llm-pi-ai'].providers['opencode-go']
+assert.equal(catalogOverride.api, undefined)
+assert.equal(catalogOverride.baseURL, undefined)
+assert.equal(catalogOverride.models, undefined)
+console.log('ok  catalog routes keep the catalog endpoint instead of copying it into settings')
 
 /* invalid input */
 const bad = await callRoute(routes, '/provider', { method: 'POST', body: { provider: 'Bad Name', baseURL: 'https://x', models: [] } })
