@@ -50,6 +50,16 @@ function makeHarness(initial, composition = {}, directory = []) {
       accesses.push({ ns, patch })
       store[ns] = deepMerge(store[ns] ?? {}, patch)
     },
+    mutate: async (ns, ops) => {
+      accesses.push({ ns, ops })
+      for (const op of ops) {
+        if (op.op !== 'unset') continue
+        const path = op.path ?? []
+        let node = store[ns]
+        for (const key of path.slice(0, -1)) node = node?.[key]
+        if (node && typeof node === 'object') delete node[path[path.length - 1]]
+      }
+    },
     installSection: () => {},
   }
   const credentials = {
