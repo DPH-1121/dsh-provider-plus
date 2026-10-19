@@ -1,0 +1,68 @@
+{
+  "name": "dsh-provider-plus",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness provider workbench: replace the built-in add-provider flow with an editor that declares image input, custom gateway headers (x-opencode-session and friends), model discovery, connectivity probes and configurable usage/balance queries.",
+  "type": "module",
+  "license": "MIT",
+  "author": "HaydenSmith1121",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DPH-1121/dsh-provider-plus.git"
+  },
+  "homepage": "https://github.com/DPH-1121/dsh-provider-plus#readme",
+  "bugs": {
+    "url": "https://github.com/DPH-1121/dsh-provider-plus/issues"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.1.6-alpha.1 <0.2.0-0 || >=0.2.0-rc.1 <0.2.1-0 || >=0.2.1-rc.2 <0.3.0-0"
+  },
+  "main": "./lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "scripts",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "check": "node scripts/smoke.mjs",
+    "test": "node scripts/smoke.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings-models",
+        "@deepseek-ai/dsh-client-ui-settings-shell"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.2 <5.0.0",
+    "@deepseek-ai/schemastery": ">=3.18.2 <4.0.0"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "dsh",
+    "provider",
+    "custom-model",
+    "image-input",
+    "vision",
+    "usage",
+    "quota",
+    "llm",
+    "cordis"
+  ]
+}

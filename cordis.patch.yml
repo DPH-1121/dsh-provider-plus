@@ -1,0 +1,16 @@
+# dsh-provider-plus bundle patch.
+#
+# The bundle contributes ONE row: its own plugin. That row carries the host half
+# (`lib/index.js`: settings reads/writes, model discovery, connectivity probes,
+# usage queries, all over loopback HTTP routes) and, through `dsh.client`, the
+# client half (`lib/client.js`: the provider workbench page plus the extension
+# strip rendered on every built-in Models card).
+#
+# Deliberately no `llm-pi-ai` config here: this plugin manages providers at
+# runtime and writes them through the settings service, so a provider exists only
+# because the user created it. A bundle patch that also declared routes would
+# fight the user's own edits, because a patch replaces the target row's whole
+# `config` and the user layer merges on top of it.
+- insert:
+    - id: provider-plus
+      name: dsh-provider-plus
