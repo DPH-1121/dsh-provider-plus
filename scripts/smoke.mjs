@@ -40,7 +40,7 @@ function deepMerge(target, patch) {
   return next
 }
 
-function makeHarness(initial) {
+function makeHarness(initial, composition = {}) {
   const store = { ...initial }
   const routes = new Map()
   const accesses = []
@@ -56,23 +56,35 @@ function makeHarness(initial) {
     resolve: async (ref) => (ref === 'DEMO_KEY' ? 'sk-demo' : undefined),
     describe: async () => ({ configured: true }),
   }
+  const configEditor = {
+    entries: () => [{ id: 'include:llm-pi-ai', name: '@deepseek-ai/dsh-llm-pi-ai', patchId: 'llm-pi-ai' }],
+    configuration: () => [
+      {
+        entry: { id: 'include:llm-pi-ai', name: '@deepseek-ai/dsh-llm-pi-ai', patchId: 'llm-pi-ai' },
+        inherited: { providers: composition },
+        override: store['llm-pi-ai'] ?? {},
+      },
+    ],
+  }
   const webServer = {
     register: (route) => {
       routes.set(route.path, route)
       return () => {}
     },
   }
-  const webCtx = { webServer, effect: (fn) => fn() }
   const ctx = {
     inject: (services, callback) => {
       callback({ settings, webServer, effect: (fn) => fn() })
       void services
     },
-    get: (name) => (name === 'credentials' ? credentials : undefined),
+    get: (name) => {
+      if (name === 'credentials') return credentials
+      if (name === 'configEditor') return configEditor
+      return undefined
+    },
     logger: { warn() {}, error() {} },
   }
-  void webCtx
-  return { ctx, routes, store, accesses }
+  return { ctx, routes, store, accesses, configEditor }
 }
 
 function fakeReq({ method = 'GET', url = '/', body, address = '127.0.0.1' }) {
@@ -141,20 +153,18 @@ const gatewayURL = `http://127.0.0.1:${gateway.address().port}`
 
 /* ------------------------------------------------------------------ host     */
 
-const { ctx, routes } = makeHarness({
-  'llm-pi-ai': {
-    providers: {
-      commandcode: {
-        displayName: 'CommandCode',
-        api: 'openai-completions',
-        baseURL: 'https://api.commandcode.ai/provider/v1',
-        apiKeyEnv: 'DEMO_KEY',
-        models: [{ id: 'deepseek/deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash', contextWindow: 1000000, input: ['text', 'image'] }],
-      },
+const { ctx, routes } = makeHarness(
+  { 'dsh-provider-plus': { usage: {} } },
+  {
+    commandcode: {
+      displayName: 'CommandCode',
+      api: 'openai-completions',
+      baseURL: 'https://api.commandcode.ai/provider/v1',
+      apiKeyEnv: 'DEMO_KEY',
+      models: [{ id: 'deepseek/deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash', contextWindow: 1000000, input: ['text', 'image'] }],
     },
   },
-  'dsh-provider-plus': { usage: {} },
-})
+)
 
 apply(ctx)
 assert.equal(routes.size, 6, 'six routes registered')
@@ -166,7 +176,9 @@ assert.equal(stateBody.ok, true)
 assert.equal(stateBody.providers.length, 1)
 assert.equal(stateBody.providers[0].keyConfigured, true)
 assert.equal(stateBody.providers[0].imageModels, 1)
-console.log('ok  state lists the declared provider and its image count')
+assert.equal(stateBody.providers[0].origin, 'composition')
+assert.equal(stateBody.providers[0].deletable, false)
+console.log('ok  state merges the composition layer and marks it non-deletable')
 
 /* loopback guard */
 const denied = await callRoute(routes, '/state', { address: '10.0.0.8' })
@@ -255,6 +267,25 @@ const deleted = await callRoute(routes, '/provider?provider=demo-gw', { method: 
 assert.equal(deleted.status, 200)
 assert.equal(deleted.json().providers.some((entry) => entry.provider === 'demo-gw'), false)
 console.log('ok  delete removes the provider from state')
+
+/* a composition provider can be overridden, never deleted from settings */
+const overridden = await callRoute(routes, '/provider', {
+  method: 'POST',
+  body: {
+    provider: 'commandcode',
+    displayName: 'CommandCode',
+    api: 'openai-completions',
+    baseURL: 'https://api.commandcode.ai/provider/v1',
+    apiKeyEnv: 'DEMO_KEY',
+    models: [{ id: 'deepseek/deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash', contextWindow: 1000000, input: ['text', 'image'] }],
+  },
+})
+const cc = overridden.json().providers.find((entry) => entry.provider === 'commandcode')
+assert.equal(cc.origin, 'settings+composition')
+assert.equal(cc.deletable, false)
+const refused = await callRoute(routes, '/provider?provider=commandcode', { method: 'DELETE', url: '/provider?provider=commandcode' })
+assert.equal(refused.status, 409)
+console.log('ok  composition providers are overridable but not deletable')
 
 /* invalid input */
 const bad = await callRoute(routes, '/provider', { method: 'POST', body: { provider: 'Bad Name', baseURL: 'https://x', models: [] } })
