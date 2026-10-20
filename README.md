@@ -37,31 +37,40 @@ API Key 仍然只在官方页填（`$DSH_HOME/.credentials.yaml` 的 `refs:`）�
 
 ## 用量查询怎么配
 
-数据面通常没有额度接口。以 CommandCode 为例，实测 `GET /provider/v1/{me,usage,quota,balance,credits,subscription}` **全部 404**，只有 `/provider/v1/models` 是 200。所以用量做成模板：
+数据面通常没有额度接口。以 CommandCode 为例，实测 `GET /provider/v1/{me,usage,quota,balance,credits,subscription}` **全部 404**，只有 `/provider/v1/models` 是 200。所以用量做成模板，存在本插件自己的文件里：
 
-```yaml
-dsh-provider-plus:
-  usage:
-    my-gateway:
-      mode: http
-      url: https://gateway.example.com/api/usage
-      method: GET
-      keyRef: MY_GATEWAY_KEY
-      headers:
-        Authorization: Bearer {key}
-      extract:
-        - label: 已用
-          path: data.used
-        - label: 额度
-          path: data.limit
-        - label: 百分比
-          path: usage[0].percent
+```text
+$DSH_HOME/storages/dsh-provider-plus/usage.json
 ```
 
+```json
+{
+  "version": 1,
+  "usages": {
+    "my-gateway": {
+      "mode": "http",
+      "url": "https://gateway.example.com/api/usage",
+      "method": "GET",
+      "keyRef": "MY_GATEWAY_KEY",
+      "headers": { "Authorization": "Bearer {key}" },
+      "body": "",
+      "extract": [
+        { "label": "已用", "path": "data.used" },
+        { "label": "额度", "path": "data.limit" },
+        { "label": "百分比", "path": "usage[0].percent" }
+      ]
+    }
+  }
+}
+```
+
+- **为什么不用 settings.yaml**：这个运行时的 settings 服务只编辑带 `volatile` 标记的配置字段，而模板是持久用户数据，不是运行时旋钮；写进配置段会被 `Plugin entry has no volatile fields` 拒掉。文件是原子写（临时文件 + rename），按请求读，改完即生效。
 - `{key}` 在 URL/头/请求体里都会替换成 `keyRef` 解析到的值。
 - `path` 支持 `a.b[0].c`。
 - 页面上的「保存并测试」会立刻打一次并把原始报错显示出来。
 - CommandCode 当前**没有**可用的额度接口，配了也只会显示原因；这不是插件的问题，是厂商没提供。
+
+实测：把模板指向 `https://api.commandcode.ai/provider/v1/models`、取 `data[0].id` 与 `data.length`，返回 `claude-sonnet-5-5` 与 `94` —— 请求、鉴权、点路径、持久化、删除清理都走通了。
 
 ## 实测记录（2026-10-20）
 
@@ -79,9 +88,9 @@ dsh-provider-plus:
 
 1. **不写协议代码**。所有请求仍由官方 `@deepseek-ai/dsh-llm-pi-ai` 发出，图片/工具/重试/replay 的行为与官方一致。
 2. **不改内置页**。两个 Slot 都是追加：`settings.section`（新页面）和 `settings.models.provider-card`（卡片下方的小条）。卸载本插件，内置页恢复原样。
-3. **provider 删除**走 `settings.update('llm-pi-ai', { providers: { <id>: null } })`，实测把该 provider 从选择器移除。
+3. **provider 删除**走 `settings.mutate('llm-pi-ai', [{ op: 'unset', path: ['providers', '<id>'] }])`：`update` + `null` 会被配置校验拒掉（“resolves no models”），只有路径 unset 才能把键删掉。删完再按**实际效果**复查一次 —— 组合层（`cordis.patch.yml`）声明的 provider 删不掉，会返回 409 并说明原因。
 4. **请求头是静态的**。`{uuid}` 在保存时展开，所以同一 provider 的所有会话共用一个 session id。OpenCode Go 官方建议按会话区分；要做到逐请求变化，得像 `dsh-opencode-go-plus` 那样自带适配器，不在本插件范围内。
-5. **不猜模型清单**。`models` 必须非空（手填或「拉取模型」导入），和 pi-ai 对手写路由的要求一致。
+5. **不猜模型清单**：手写路由的 `models` 必须非空，和 pi-ai 对手写路由的要求一致；`pi-ai` 内置目录路由则允许留空（= 用目录全部模型），此时 `api`/`baseURL` 也不能写，否则会被降级成手写路由。
 
 ## 自检
 

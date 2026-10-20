@@ -13,12 +13,16 @@
 import assert from 'node:assert/strict'
 import http from 'node:http'
 import { createServer } from 'node:http'
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, readFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const root = join(here, '..')
+
+/* Isolate the usage-template file store from the real harness home. */
+process.env.DSH_HOME = await mkdtemp(join(tmpdir(), 'dsh-provider-plus-smoke-'))
 
 const { apply } = await import(pathToFileURL(join(root, 'lib', 'index.js')).href)
 
@@ -46,6 +50,10 @@ function makeHarness(initial, composition = {}, directory = []) {
   const accesses = []
   const settings = {
     get: (ns) => store[ns],
+    describe: () => [
+      { ns: 'provider-plus', value: store['provider-plus'] ?? { usage: {} }, autoGenerate: false, schema: {}, revision: 1, applies: 'live' },
+    ],
+    configure: () => () => {},
     update: async (ns, patch) => {
       accesses.push({ ns, patch })
       store[ns] = deepMerge(store[ns] ?? {}, patch)
