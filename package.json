@@ -1,6 +1,6 @@
 {
   "name": "dsh-provider-plus",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "DeepSeek Harness provider workbench: replace the built-in add-provider flow with an editor that declares image input, custom gateway headers (x-opencode-session and friends), model discovery, connectivity probes and configurable usage/balance queries.",
   "type": "module",
   "license": "MIT",
