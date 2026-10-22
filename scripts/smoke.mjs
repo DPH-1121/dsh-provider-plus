@@ -93,11 +93,17 @@ function makeHarness(initial, composition = {}, directory = []) {
       return () => {}
     },
   }
+  const disposers = []
+  const effect = (fn) => {
+    const dispose = fn()
+    if (typeof dispose === 'function') disposers.push(dispose)
+  }
   const ctx = {
     inject: (services, callback) => {
-      callback({ settings, webServer, effect: (fn) => fn() })
+      callback({ settings, webServer, effect })
       void services
     },
+    effect,
     get: (name) => {
       if (name === 'credentials') return credentials
       if (name === 'configEditor') return configEditor
@@ -106,7 +112,7 @@ function makeHarness(initial, composition = {}, directory = []) {
     },
     logger: { warn() {}, error() {} },
   }
-  return { ctx, routes, store, accesses, configEditor, llm }
+  return { ctx, routes, store, accesses, configEditor, llm, disposers }
 }
 
 function fakeReq({ method = 'GET', url = '/', body, address = '127.0.0.1' }) {
@@ -175,7 +181,7 @@ const gatewayURL = `http://127.0.0.1:${gateway.address().port}`
 
 /* ------------------------------------------------------------------ host     */
 
-const { ctx, routes, store } = makeHarness(
+const { ctx, routes, store, disposers } = makeHarness(
   { 'dsh-provider-plus': { usage: {} } },
   {
     commandcode: {
@@ -381,9 +387,11 @@ assert.deepEqual(
   [
     ['settings.section', 'provider-plus'],
     ['settings.models.provider-card', 'llm-pi-ai'],
+    ['conversation.input.activity', undefined],
   ],
 )
-console.log('ok  client registers the workbench page and the provider-card strip')
+console.log('ok  client registers the workbench page, the provider-card strip and the composer usage chip')
 
+for (const dispose of disposers) dispose()
 gateway.close()
 console.log('\nall smoke checks passed')
