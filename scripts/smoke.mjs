@@ -164,7 +164,7 @@ const gateway = http.createServer((req, res) => {
   }
   if (req.url === '/usage' && req.method === 'GET') {
     res.writeHead(200, { 'content-type': 'application/json' })
-    res.end(JSON.stringify({ data: { used: 42, limit: 100, windows: [{ percent: 42 }] } }))
+    res.end(JSON.stringify({ data: { used: 42, limit: 100, windows: [{ percent: 42 }], limits: [{ unit: 3, percentage: 12 }, { unit: 6, percentage: 34 }] } }))
     return
   }
   res.writeHead(404, { 'content-type': 'application/json' })
@@ -267,6 +267,7 @@ const usageSaved = await callRoute(routes, '/usage', {
       { label: '已用', path: 'data.used' },
       { label: '额度', path: 'data.limit' },
       { label: '百分比', path: 'data.windows[0].percent' },
+      { label: '5h', path: 'data.limits[unit=3].percentage' },
     ],
   },
 })
@@ -278,9 +279,10 @@ assert.deepEqual(
     ['已用', 42],
     ['额度', 100],
     ['百分比', 42],
+    ['5h', 12],
   ],
 )
-console.log('ok  usage template expands {key}, reads dot/bracket paths')
+console.log('ok  usage template expands {key}, reads dot/bracket/selector paths')
 
 /* usage config persisted in this plugin's own namespace */
 const savedState = (await callRoute(routes, '/state')).json()
