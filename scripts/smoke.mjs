@@ -288,7 +288,10 @@ console.log('ok  usage template expands {key}, reads dot/bracket/selector paths'
 const savedState = (await callRoute(routes, '/state')).json()
 assert.equal(savedState.providers.find((entry) => entry.provider === 'demo-gw').usage.mode, 'http')
 assert.ok(savedState.providers.find((entry) => entry.provider === 'demo-gw').usage.url.startsWith(gatewayURL))
-console.log('ok  usage template persisted in the plugin namespace')
+const cachedResult = savedState.providers.find((entry) => entry.provider === 'demo-gw').usageResult
+assert.equal(cachedResult.ok, true)
+assert.equal(cachedResult.rows.find((row) => row.label === '5h').value, 12)
+console.log('ok  usage result stays visible after the request')
 
 /* delete */
 const deleted = await callRoute(routes, '/provider?provider=demo-gw', { method: 'DELETE', url: '/provider?provider=demo-gw' })
