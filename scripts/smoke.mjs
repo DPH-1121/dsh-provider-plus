@@ -70,9 +70,16 @@ function makeHarness(initial, composition = {}, directory = []) {
     },
     installSection: () => {},
   }
+  const credentialStore = new Map([['DEMO_KEY', 'sk-demo']])
   const credentials = {
-    resolve: async (ref) => (ref === 'DEMO_KEY' ? 'sk-demo' : undefined),
-    describe: async () => ({ configured: true }),
+    resolve: async (ref) => credentialStore.get(ref),
+    describe: async (ref) => ({ configured: credentialStore.has(ref) }),
+    set: async (ref, value) => {
+      credentialStore.set(ref, value)
+    },
+    unset: async (ref) => {
+      credentialStore.delete(ref)
+    },
   }
   const configEditor = {
     entries: () => [{ id: 'include:llm-pi-ai', name: '@deepseek-ai/dsh-llm-pi-ai', patchId: 'llm-pi-ai' }],
@@ -112,7 +119,7 @@ function makeHarness(initial, composition = {}, directory = []) {
     },
     logger: { warn() {}, error() {} },
   }
-  return { ctx, routes, store, accesses, configEditor, llm, disposers }
+  return { ctx, routes, store, accesses, configEditor, llm, disposers, credentials: credentialStore }
 }
 
 function fakeReq({ method = 'GET', url = '/', body, address = '127.0.0.1' }) {
@@ -181,7 +188,7 @@ const gatewayURL = `http://127.0.0.1:${gateway.address().port}`
 
 /* ------------------------------------------------------------------ host     */
 
-const { ctx, routes, store, disposers } = makeHarness(
+const { ctx, routes, store, disposers, credentials: credentialStore } = makeHarness(
   { 'dsh-provider-plus': { usage: {} } },
   {
     commandcode: {
@@ -237,6 +244,45 @@ assert.ok(demo, 'new provider appears in state')
 assert.deepEqual(demo.models[0].input, ['text', 'image'])
 assert.match(demo.headers['x-opencode-session'], /^[0-9a-f-]{36}$/i, '{uuid} expanded at save time')
 console.log('ok  provider upsert writes models + expanded headers')
+
+/* an API Key typed in the workbench goes to the credential store, not settings */
+const keyed = await callRoute(routes, '/provider', {
+  method: 'POST',
+  body: {
+    provider: 'demo-key',
+    displayName: 'Demo Key',
+    api: 'openai-completions',
+    baseURL: gatewayURL,
+    apiKeyEnv: 'PLUGIN_KEY',
+    apiKey: 'sk-typed-in-the-workbench',
+    models: [{ id: 'vendor/plain-1', name: 'Plain One' }],
+  },
+})
+assert.equal(keyed.status, 200)
+assert.equal(credentialStore.get('PLUGIN_KEY'), 'sk-typed-in-the-workbench', 'Key stored under its reference')
+const keyedRow = keyed.json().providers.find((entry) => entry.provider === 'demo-key')
+assert.equal(keyedRow.keyConfigured, true, 'state reports the Key as configured')
+assert.equal(keyedRow.models.length, 1)
+assert.equal(JSON.stringify(store).includes('sk-typed-in-the-workbench'), false, 'the Key never reaches the settings store')
+console.log('ok  an inline API Key reaches the credential store, never the settings')
+
+/* a Key with no reference name is refused before anything is written */
+const noRef = await callRoute(routes, '/provider', {
+  method: 'POST',
+  body: {
+    provider: 'demo-noref',
+    displayName: 'No Ref',
+    api: 'openai-completions',
+    baseURL: gatewayURL,
+    apiKeyEnv: '',
+    apiKey: 'sk-orphan-value',
+    models: [{ id: 'vendor/plain-1', name: 'Plain One' }],
+  },
+})
+assert.equal(noRef.status, 400)
+assert.equal([...credentialStore.values()].includes('sk-orphan-value'), false)
+assert.equal(store['llm-pi-ai']?.providers?.['demo-noref'], undefined, 'nothing was written')
+console.log('ok  a Key without a credential reference is refused')
 
 /* discovery over a real socket */
 const discovered = await callRoute(routes, '/discover', {

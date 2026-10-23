@@ -29,11 +29,13 @@ dsh plugin --profile desktop add github:DPH-1121/dsh-provider-plus
 
 | 位置 | 用途 |
 |---|---|
-| 设置 → 提供商增强 | 增删改 provider、勾图片、写请求头、拉模型、测连通、配用量模板 |
+| 设置 → 提供商增强 | 增删改 provider、勾图片、写请求头、填 API Key、拉模型、测连通、配用量模板 |
 | 设置 → 模型 → 每张卡片下方 | 一条只读摘要：`N/M 支持图片` + 一键测连通 |
 | 设置 → 模型 | 官方原样：填 API Key、启用/停用行、登录 |
 
-API Key 仍然只在官方页填（`$DSH_HOME/.credentials.yaml` 的 `refs:`），本插件只报告「已配置 / 未配置」，不读也不写密钥。
+API Key 现在两处都能填，写的是同一个地方（`$DSH_HOME/.credentials.yaml` 的 `refs:`）：在工作台的「凭据与请求头」里粘贴 Key，保存时插件调用凭据服务写进 `<凭据引用>` 名下；留空则只改 provider、不动已有凭据。插件只报告「已配置 / 未配置」，从不回显已存的值，也不把 Key 写进 profile 配置。
+
+手写路由的模型表可以留空：保存时会自动向端点要一次模型列表并整份采用（端点没返回模型时才要求手动勾选）。
 
 ## 用量查询怎么配
 
@@ -90,7 +92,7 @@ $DSH_HOME/storages/dsh-provider-plus/usage.json
 2. **不改内置页**。两个 Slot 都是追加：`settings.section`（新页面）和 `settings.models.provider-card`（卡片下方的小条）。卸载本插件，内置页恢复原样。
 3. **provider 删除**走 `settings.mutate('llm-pi-ai', [{ op: 'unset', path: ['providers', '<id>'] }])`：`update` + `null` 会被配置校验拒掉（“resolves no models”），只有路径 unset 才能把键删掉。删完再按**实际效果**复查一次 —— 组合层（`cordis.patch.yml`）声明的 provider 删不掉，会返回 409 并说明原因。
 4. **请求头是静态的**。`{uuid}` 在保存时展开，所以同一 provider 的所有会话共用一个 session id。OpenCode Go 官方建议按会话区分；要做到逐请求变化，得像 `dsh-opencode-go-plus` 那样自带适配器，不在本插件范围内。
-5. **不猜模型清单**：手写路由的 `models` 必须非空，和 pi-ai 对手写路由的要求一致；`pi-ai` 内置目录路由则允许留空（= 用目录全部模型），此时 `api`/`baseURL` 也不能写，否则会被降级成手写路由。
+5. **不猜模型清单**：手写路由的 `models` 必须非空，和 pi-ai 对手写路由的要求一致；`pi-ai` 内置目录路由则允许留空（= 用目录全部模型），此时 `api`/`baseURL` 也不能写，否则会被降级成手写路由。工作台在保存空模型表时会先向端点要一次列表并整份写入，所以不用手动凑一条。
 
 ## 自检
 
@@ -98,4 +100,4 @@ $DSH_HOME/storages/dsh-provider-plus/usage.json
 npm run check   # node scripts/smoke.mjs
 ```
 
-覆盖：state 汇总 / 非 loopback 拒绝 / provider 写入（含 `{uuid}` 展开）/ 模型发现归一化与视觉预勾 / 连通性探测 / 用量模板取值 / 用量配置持久化 / 删除 / 非法输入 / client 半真的注册了两个 Slot。
+覆盖：state 汇总 / 非 loopback 拒绝 / provider 写入（含 `{uuid}` 展开）/ 内联 API Key 写入凭据存储且不进配置 / 缺引用名时拒绝 / 模型发现归一化与视觉预勾 / 连通性探测 / 用量模板取值 / 用量配置持久化 / 删除 / 非法输入 / client 半真的注册了两个 Slot。
