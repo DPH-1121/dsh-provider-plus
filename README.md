@@ -69,8 +69,9 @@ $DSH_HOME/storages/dsh-provider-plus/usage.json
 - **为什么不用 settings.yaml**：这个运行时的 settings 服务只编辑带 `volatile` 标记的配置字段，而模板是持久用户数据，不是运行时旋钮；写进配置段会被 `Plugin entry has no volatile fields` 拒掉。文件是原子写（临时文件 + rename），按请求读，改完即生效。
 - `{key}` 在 URL/头/请求体里都会替换成 `keyRef` 解析到的值。
 - `path` 支持 `a.b[0].c`。
+- 一条取值可以带 `of`：`{"label":"周已用%","path":"weekly.used","of":"weekly.cap","unit":"%"}` 会输出 `used/cap*100` 的百分比；`unit` 取 `%` / `$` 决定这行怎么显示（不带 `unit` 的旧模板仍按标签里的 `%` 判断）。
 - 页面上的「保存并测试」会立刻打一次并把原始报错显示出来。
-- CommandCode 当前**没有**可用的额度接口，配了也只会显示原因；这不是插件的问题，是厂商没提供。
+- **CommandCode GOAT**：`/provider/v1/*` 全部 404，但 `/alpha/billing/credits` 可用（2026-10-24 实测）：返回 `windowLimits.fiveHour|weekly {used, cap}` 与 `credits.monthlyCredits`。内置预设「CommandCode GOAT」已经按 5 小时%、周%、月额度剩余（$）配好，模板里用 `of` 把 used/cap 换算成百分比。
 
 实测：把模板指向 `https://api.commandcode.ai/provider/v1/models`、取 `data[0].id` 与 `data.length`，返回 `claude-sonnet-5-5` 与 `94` —— 请求、鉴权、点路径、持久化、删除清理都走通了。
 
@@ -100,4 +101,4 @@ $DSH_HOME/storages/dsh-provider-plus/usage.json
 npm run check   # node scripts/smoke.mjs
 ```
 
-覆盖：state 汇总 / 非 loopback 拒绝 / provider 写入（含 `{uuid}` 展开）/ 内联 API Key 写入凭据存储且不进配置 / 缺引用名时拒绝 / 模型发现归一化与视觉预勾 / 连通性探测 / 用量模板取值 / 用量配置持久化 / 删除 / 非法输入 / client 半真的注册了两个 Slot。
+覆盖：state 汇总 / 非 loopback 拒绝 / provider 写入（含 `{uuid}` 展开）/ 内联 API Key 写入凭据存储且不进配置 / 缺引用名时拒绝 / 模型发现归一化与视觉预勾 / 连通性探测 / 用量模板取值 / used+cap 换算成百分比并保留单位 / 用量配置持久化 / 删除 / 非法输入 / client 半真的注册了两个 Slot。
