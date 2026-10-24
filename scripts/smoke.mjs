@@ -175,6 +175,11 @@ const gateway = http.createServer((req, res) => {
     )
     return
   }
+  if (req.url === '/credits' && req.method === 'GET') {
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ windowLimits: { fiveHour: { used: 3.5, cap: 14 }, weekly: { used: 30, cap: 35 } }, credits: { monthlyCredits: 9.727022048 } }))
+    return
+  }
   if (req.url === '/usage' && req.method === 'GET') {
     res.writeHead(200, { 'content-type': 'application/json' })
     res.end(JSON.stringify({ data: { used: 42, limit: 100, windows: [{ percent: 42 }], limits: [{ unit: 3, percentage: 12 }, { unit: 6, percentage: 34 }] } }))
@@ -344,6 +349,33 @@ const cachedResult = savedState.providers.find((entry) => entry.provider === 'de
 assert.equal(cachedResult.ok, true)
 assert.equal(cachedResult.rows.find((row) => row.label === '5h').value, 12)
 console.log('ok  usage result stays visible after the request')
+
+/* used+cap pairs become a percentage, and a money row keeps its unit */
+const percentRun = await callRoute(routes, '/usage', {
+  method: 'POST',
+  body: {
+    provider: 'demo-gw',
+    run: true,
+    mode: 'http',
+    url: `${gatewayURL}/credits`,
+    method: 'GET',
+    keyRef: 'DEMO_KEY',
+    headers: { authorization: 'Bearer {key}' },
+    extract: [
+      { label: '5 小时已用%', path: 'windowLimits.fiveHour.used', of: 'windowLimits.fiveHour.cap', unit: '%' },
+      { label: '周已用%', path: 'windowLimits.weekly.used', of: 'windowLimits.weekly.cap', unit: '%' },
+      { label: '月额度剩余', path: 'credits.monthlyCredits', unit: '$' },
+    ],
+  },
+})
+const percentBody = percentRun.json()
+assert.equal(percentBody.ok, true)
+assert.deepEqual(percentBody.rows, [
+  { label: '5 小时已用%', value: 25, unit: '%' },
+  { label: '周已用%', value: 85.7, unit: '%' },
+  { label: '月额度剩余', value: 9.73, unit: '$' },
+])
+console.log('ok  used/cap pairs become percentages and keep their unit')
 
 /* delete */
 const deleted = await callRoute(routes, '/provider?provider=demo-gw', { method: 'DELETE', url: '/provider?provider=demo-gw' })
