@@ -499,6 +499,25 @@ function countInputs(node) {
 assert.ok(countInputs(paneTree) >= 3, 'config pane renders ID, name and baseURL inputs')
 console.log('ok  config pane renders its basic-info inputs')
 
+/* Choosing a model from the endpoint updates just the targeted row and keeps
+   the editable fields in the same shape as a manually added model. */
+const originalModels = [
+  { id: 'old', name: 'Old', contextWindow: 1000, image: false },
+  { id: 'keep', name: 'Keep', contextWindow: 2000, image: false },
+]
+const selectedModels = plugin.__test.replaceModelAt(originalModels, 0, {
+  id: 'vision-model',
+  name: 'Vision Model',
+  contextWindow: 128000,
+  suggestedInput: ['text', 'image'],
+})
+assert.deepEqual(selectedModels, [
+  { id: 'vision-model', name: 'Vision Model', contextWindow: 128000, image: true },
+  originalModels[1],
+])
+assert.deepEqual(originalModels[0], { id: 'old', name: 'Old', contextWindow: 1000, image: false })
+console.log('ok  selecting an endpoint model fills only the chosen row')
+
 for (const dispose of disposers) dispose()
 gateway.close()
 console.log('\nall smoke checks passed')
