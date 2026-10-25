@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>模型列表 · 获取成功示例</title>
+  <style>
+    :root { color-scheme: light; --text:#22262b; --muted:#77808a; --hint:#a5adb6; --line:#e6e9ed; --panel:#f7f8fa; --white:#fff; --focus:#4d6bfe; }
+    * { box-sizing:border-box; }
+    body { margin:0; padding:44px 20px; background:#eef0f3; font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; color:var(--text); }
+    .stage { width:min(100%,600px); margin:auto; }
+    .eyebrow { font-size:11px; letter-spacing:.08em; color:#7f8791; margin:0 0 13px 6px; }
+    .card { padding:22px 20px 24px; background:var(--panel); border:1px solid #e4e7eb; border-radius:14px; box-shadow:0 16px 50px rgba(25,36,52,.06); }
+    .head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:20px; }
+    .head-title { display:flex; align-items:center; gap:7px; font-size:13px; font-weight:600; }
+    .head-title span { color:#89919a; font-size:12px; font-weight:400; }
+    .actions { display:flex; align-items:center; gap:8px; }
+    button { font:inherit; cursor:pointer; }
+    .button { min-height:32px; border:1px solid #dce0e5; border-radius:7px; background:#fff; padding:0 11px; color:#383f47; font-size:12px; white-space:nowrap; }
+    .button:hover,.pick:hover { border-color:#b9c0c9; background:#fbfcfe; }
+    .button:focus-visible,.pick:focus-visible,.option:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+    .add { display:flex; align-items:center; gap:6px; }
+    .plus { font-size:17px; line-height:0; font-weight:300; }
+    .table { background:var(--white); border:1px solid var(--line); border-radius:9px; overflow:hidden; }
+    .columns,.row { display:grid; grid-template-columns:minmax(80px,1.1fr) minmax(100px,1.35fr) 78px 76px 34px 27px; align-items:center; gap:6px; padding:10px 9px; }
+    .columns { min-height:42px; color:#929aa3; font-size:11px; border-bottom:1px solid var(--line); }
+    .columns span:nth-child(n+4) { text-align:center; }
+    .row { min-height:54px; border-bottom:1px solid #f0f1f3; }
+    .row:last-child { border-bottom:0; }
+    .cell { width:100%; min-width:0; height:33px; border:1px solid #e0e4e8; border-radius:6px; background:#fff; color:#292d33; padding:0 8px; font-size:12px; outline:none; }
+    .cell:focus { border-color:var(--focus); box-shadow:0 0 0 2px rgba(77,107,254,.1); }
+    .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11px; }
+    .cell::placeholder { color:#b8bec6; }
+    .pick { width:100%; height:31px; border:1px solid #dce0e5; border-radius:6px; background:#fff; color:#343b44; font-size:11px; }
+    .check { width:15px; height:15px; margin:0 auto; accent-color:var(--focus); }
+    .trash { width:26px; height:30px; border:0; background:transparent; color:#87909b; display:grid; place-items:center; padding:0; }
+    .trash:hover { color:#bc4343; }
+    .picker { margin:0 9px 9px; padding:12px; background:#f8f9fb; border:1px solid #dee3e9; border-radius:8px; }
+    .picker-head { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; }
+    .picker-title { font-size:12px; font-weight:600; }
+    .picker-count { margin-left:6px; color:#929aa3; font-size:11px; font-weight:400; }
+    .close { background:transparent; border:0; padding:4px 0; color:#737c86; font-size:11px; }
+    .list { max-height:255px; overflow:auto; background:#fff; border:1px solid #e3e7eb; border-radius:7px; }
+    .option { width:100%; padding:11px 12px; display:flex; justify-content:space-between; align-items:center; gap:12px; text-align:left; background:#fff; border:0; border-bottom:1px solid #edf0f2; color:var(--text); }
+    .option:last-child { border-bottom:0; }
+    .option:hover { background:#f4f7ff; }
+    .option-text { min-width:0; display:flex; flex-direction:column; gap:4px; }
+    .option-name { font-size:12px; font-weight:550; line-height:17px; white-space:normal; overflow-wrap:anywhere; }
+    .option-id { font:11px/16px ui-monospace,SFMono-Regular,Menlo,monospace; color:#939ba5; white-space:normal; overflow-wrap:anywhere; }
+    .option-arrow { color:#a3abb5; flex:0 0 auto; font-size:16px; }
+    .note { margin:14px 1px 0; color:#7e8791; font-size:11px; line-height:17px; }
+    [hidden] { display:none !important; }
+    @media (max-width:580px) { body{padding:18px 8px;} .card{padding:17px 10px;} .table{overflow-x:auto;} .columns,.row{min-width:515px;} }
+  </style>
+</head>
+<body>
+  <main class="stage">
+    <div class="eyebrow">模型增强 · 获取成功状态示例</div>
+    <section class="card" aria-label="模型配置预览">
+      <div class="head">
+        <div class="head-title">模型 <span id="count">2</span></div>
+        <div class="actions">
+          <button class="button" id="getModels" type="button">获取模型</button>
+          <button class="button add" id="addModel" type="button"><span class="plus">+</span>添加模型</button>
+        </div>
+      </div>
+      <div class="picker" id="topPicker" hidden></div>
+      <div class="table" id="table">
+        <div class="columns"><span>模型 ID</span><span>显示名称</span><span>上下文窗口</span><span>端点模型</span><span>图片</span><span></span></div>
+      </div>
+      <p class="note">此页使用示例数据；点击“选择”可查看当前行的模型列表。</p>
+    </section>
+  </main>
+  <script>
+    const options = [
+      {id:'deepseek-v4.1-flash',name:'DeepSeek V4.1 Flash',window:'1M',image:false},
+      {id:'gateway/reasoner-preview-long-context-2026',name:'Reasoner Preview · Extended Context Edition',window:'256k',image:false},
+      {id:'vision-235b-a22b-instruct',name:'Vision 235B A22B Instruct · Multimodal Preview',window:'128k',image:true}
+    ];
+    const rows = [
+      {id:'demo-model',name:'Demo Model',window:'128k',image:false},
+      {id:'',name:'',window:'',image:false}
+    ];
+    let openPicker = 0;
+    const table = document.getElementById('table');
+    const topPicker = document.getElementById('topPicker');
+    const escapeHtml = value => String(value).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const trashIcon = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3m3 0-.8 12H6.8L6 7m4 4v5m4-5v5"/></svg>';
+    function panel(index) {
+      const choices = options.filter(option => !rows.some((row,at) => at !== index && row.id === option.id));
+      return `<div class="picker-head"><div class="picker-title">可选模型<span class="picker-count">${choices.length} 个</span></div><button class="close" type="button" data-close="1">收起</button></div><div class="list" role="listbox" aria-label="可选模型">${choices.map(option => `<button class="option" type="button" role="option" data-model="${escapeHtml(option.id)}" data-index="${index}"><span class="option-text"><span class="option-name">${escapeHtml(option.name)}</span><span class="option-id">${escapeHtml(option.id)}</span></span><span class="option-arrow">›</span></button>`).join('')}</div>`;
+    }
+    function render() {
+      document.getElementById('count').textContent = String(rows.length);
+      topPicker.hidden = openPicker !== -1;
+      if (openPicker === -1) topPicker.innerHTML = panel(-1);
+      table.innerHTML = `<div class="columns"><span>模型 ID</span><span>显示名称</span><span>上下文窗口</span><span>端点模型</span><span>图片</span><span></span></div>` + rows.map((row,index) => `<div class="row" data-row="${index}"><input class="cell mono" aria-label="模型 ID" value="${escapeHtml(row.id)}" placeholder="模型 ID"><input class="cell" aria-label="显示名称" value="${escapeHtml(row.name)}" placeholder="显示名称"><input class="cell mono" aria-label="上下文窗口" value="${escapeHtml(row.window)}" placeholder="128k"><button class="pick" type="button" data-pick="${index}">选择</button><input class="check" type="checkbox" aria-label="图片能力" ${row.image?'checked':''}><button class="trash" type="button" aria-label="移除模型" data-remove="${index}">${trashIcon}</button></div>${openPicker === index ? `<div class="picker" data-panel="${index}">${panel(index)}</div>` : ''}`).join('');
+    }
+    document.getElementById('getModels').addEventListener('click', () => { openPicker = -1; render(); });
+    document.getElementById('addModel').addEventListener('click', () => { rows.push({id:'',name:'',window:'',image:false}); openPicker = null; render(); });
+    document.addEventListener('click', event => {
+      const target = event.target.closest('button');
+      if (!target) return;
+      if (target.dataset.close) { openPicker = null; render(); }
+      if (target.dataset.pick !== undefined) { const index = Number(target.dataset.pick); openPicker = openPicker === index ? null : index; render(); }
+      if (target.dataset.remove !== undefined) { rows.splice(Number(target.dataset.remove),1); openPicker = null; render(); }
+      if (target.dataset.model) {
+        const selected = options.find(option => option.id === target.dataset.model);
+        const model = {id:selected.id,name:selected.name,window:selected.window,image:selected.image};
+        if (Number(target.dataset.index) < 0) rows.push(model); else rows[Number(target.dataset.index)] = model;
+        openPicker = null;
+        render();
+      }
+    });
+    table.addEventListener('input', event => {
+      const row = event.target.closest('[data-row]');
+      if (!row) return;
+      const index = Number(row.dataset.row);
+      const field = event.target.getAttribute('aria-label');
+      if (field === '模型 ID') rows[index].id = event.target.value;
+      if (field === '显示名称') rows[index].name = event.target.value;
+      if (field === '上下文窗口') rows[index].window = event.target.value;
+      if (field === '图片能力') rows[index].image = event.target.checked;
+    });
+    render();
+  </script>
+</body>
+</html>

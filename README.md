@@ -4,6 +4,12 @@
 
 它不写协议、不接管内置页面：改的仍是 `llm-pi-ai.providers`，**设置 → 模型** 照旧可用，只是多了一个 **设置 → 模型增强** 工作台。细节见[使用说明](./docs/guide.md)。
 
+## 界面示例
+
+下图是“获取模型”成功后的示例状态，模型名称和数据仅用于展示布局。可查看[交互预览](./docs/previews/model-picker-success.html)。
+
+![模型列表获取成功示例](./docs/previews/model-picker-success.png)
+
 ## 安装
 
 见 [**DSH 插件安装教程**](https://github.com/DPH-1121/dsh-plugins/blob/main/docs/install.md)。

@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="620" height="672" viewBox="0 0 620 672">
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="14" stdDeviation="22" flood-color="#172338" flood-opacity=".08"/></filter>
+    <style>
+      .ui{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;fill:#22262b}
+      .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;fill:#343a42}
+      .muted{fill:#939ba5}.hint{fill:#a4acb6}.line{stroke:#e6e9ed;stroke-width:1}.button{fill:#fff;stroke:#dce0e5;stroke-width:1}.input{fill:#fff;stroke:#e0e4e8;stroke-width:1}
+    </style>
+  </defs>
+  <rect width="620" height="672" fill="#eef0f3"/>
+  <text class="ui muted" x="30" y="31" font-size="12" letter-spacing="1">模型增强 · 获取成功状态示例</text>
+  <rect x="20" y="50" width="580" height="596" rx="14" fill="#f7f8fa" stroke="#e4e7eb" filter="url(#shadow)"/>
+  <text class="ui" x="42" y="90" font-size="14" font-weight="600">模型</text>
+  <text class="ui muted" x="77" y="90" font-size="12">2</text>
+  <rect class="button" x="368" y="67" width="92" height="32" rx="7"/>
+  <text class="ui" x="414" y="88" font-size="12" text-anchor="middle">获取模型</text>
+  <rect class="button" x="468" y="67" width="110" height="32" rx="7"/>
+  <text class="ui" x="523" y="88" font-size="12" text-anchor="middle">＋ 添加模型</text>
+  <rect x="42" y="119" width="536" height="480" rx="8" fill="#fff" stroke="#e6e9ed"/>
+  <line class="line" x1="42" y1="161" x2="578" y2="161"/>
+  <text class="ui muted" x="54" y="145" font-size="11">模型 ID</text>
+  <text class="ui muted" x="177" y="145" font-size="11">显示名称</text>
+  <text class="ui muted" x="311" y="145" font-size="11">上下文窗口</text>
+  <text class="ui muted" x="409" y="145" font-size="11">端点模型</text>
+  <text class="ui muted" x="503" y="145" font-size="11">图片</text>
+  <line class="line" x1="42" y1="219" x2="578" y2="219"/>
+  <rect class="input" x="54" y="173" width="113" height="34" rx="6"/>
+  <text class="mono" x="64" y="195" font-size="11">demo-model</text>
+  <rect class="input" x="175" y="173" width="127" height="34" rx="6"/>
+  <text class="ui" x="185" y="195" font-size="12">Demo Model</text>
+  <rect class="input" x="310" y="173" width="86" height="34" rx="6"/>
+  <text class="mono" x="320" y="195" font-size="11">128k</text>
+  <rect class="button" x="404" y="175" width="78" height="31" rx="6"/>
+  <text class="ui" x="443" y="195" font-size="11" text-anchor="middle">选择</text>
+  <rect x="510" y="183" width="14" height="14" rx="2" fill="#fff" stroke="#8e97a1"/>
+  <g stroke="#89929c" stroke-width="1.25" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M547 183h11m-9 0v-3h7v3m-8 2 .6 12h8.8l.6-12m-7 3v6m3-6v6"/></g>
+  <rect x="51" y="228" width="518" height="313" rx="8" fill="#f8f9fb" stroke="#dee3e9"/>
+  <text class="ui" x="65" y="254" font-size="12" font-weight="600">可选模型</text>
+  <text class="ui muted" x="119" y="254" font-size="11">3 个</text>
+  <text class="ui muted" x="529" y="254" font-size="11">收起</text>
+  <rect x="64" y="267" width="492" height="260" rx="7" fill="#fff" stroke="#e3e7eb"/>
+  <line class="line" x1="64" y1="341" x2="556" y2="341"/>
+  <line class="line" x1="64" y1="444" x2="556" y2="444"/>
+  <text class="ui" x="78" y="291" font-size="12" font-weight="600">DeepSeek V4.1 Flash</text>
+  <text class="mono muted" x="78" y="312" font-size="11">deepseek-v4.1-flash</text>
+  <text class="ui hint" x="532" y="304" font-size="18">›</text>
+  <text class="ui" x="78" y="367" font-size="12" font-weight="600">Reasoner Preview · Experimental Long</text>
+  <text class="ui" x="78" y="384" font-size="12" font-weight="600">Context Edition</text>
+  <text class="mono muted" x="78" y="407" font-size="11">gateway/reasoner-preview-experimental-</text>
+  <text class="mono muted" x="78" y="423" font-size="11">long-context-2026</text>
+  <text class="ui hint" x="532" y="397" font-size="18">›</text>
+  <text class="ui" x="78" y="470" font-size="12" font-weight="600">Vision 235B A22B Instruct</text>
+  <text class="mono muted" x="78" y="490" font-size="11">vision-235b-a22b-instruct</text>
+  <text class="ui hint" x="532" y="483" font-size="18">›</text>
+  <line class="line" x1="42" y1="549" x2="578" y2="549"/>
+  <rect class="input" x="54" y="559" width="113" height="30" rx="6"/>
+  <text class="ui hint" x="64" y="579" font-size="11">模型 ID</text>
+  <rect class="input" x="175" y="559" width="127" height="30" rx="6"/>
+  <text class="ui hint" x="185" y="579" font-size="11">显示名称</text>
+  <rect class="input" x="310" y="559" width="86" height="30" rx="6"/>
+  <text class="mono hint" x="320" y="579" font-size="11">128k</text>
+  <rect class="button" x="404" y="559" width="78" height="30" rx="6"/>
+  <text class="ui" x="443" y="579" font-size="11" text-anchor="middle">选择</text>
+  <rect x="510" y="567" width="14" height="14" rx="2" fill="#fff" stroke="#8e97a1"/>
+  <g stroke="#89929c" stroke-width="1.25" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M547 566h11m-9 0v-3h7v3m-8 2 .6 12h8.8l.6-12m-7 3v6m3-6v6"/></g>
+  <text class="ui muted" x="42" y="627" font-size="11">示例数据 · 点击选项后填入当前行</text>
+</svg>
