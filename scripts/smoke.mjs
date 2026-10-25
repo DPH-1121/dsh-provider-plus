@@ -519,6 +519,18 @@ assert.deepEqual(selectedModels, [
 assert.deepEqual(originalModels[0], { id: 'old', name: 'Old', contextWindow: 1000, image: false })
 console.log('ok  selecting an endpoint model fills only the chosen row')
 
+assert.equal(plugin.__test.parseContextWindow('1M'), 1000000)
+assert.equal(plugin.__test.parseContextWindow('1m'), 1000000)
+assert.equal(plugin.__test.parseContextWindow('128k'), 128000)
+assert.equal(plugin.__test.parseContextWindow('1.5M'), 1500000)
+assert.equal(plugin.__test.parseContextWindow('128000'), 128000)
+assert.ok(Number.isNaN(plugin.__test.parseContextWindow('128mb')))
+assert.equal(plugin.__test.formatContextWindowInput(128000), '128k')
+assert.equal(plugin.__test.modelsForSave({ models: [{ id: 'window-test', name: '', contextWindow: '1m', image: false }] })[0].contextWindow, 1000000)
+assert.equal(plugin.__test.duplicateModelId([{ id: 'model-a' }, { id: ' model-a ' }]), 'model-a')
+assert.equal(plugin.__test.duplicateModelId([{ id: 'model-a' }, { id: 'model-b' }]), null)
+console.log('ok  context-window inputs accept K/M units and reject invalid values')
+
 /* A row picker must expose a full-width option with its complete long name,
    and the destructive action should use a recognizable trash icon. */
 const longModelName = 'DeepSeek Reasoner Preview 2026 Experimental Long Context Edition'
@@ -533,8 +545,8 @@ let hookIndex = 0
 let selectedRowDraft = null
 React.useState = (initial) => {
   const index = hookIndex++
-  if (index === 2) return [{ key: pickerCacheKey, models: [{ id: 'deepseek-reasoner-preview-2026-long-context', name: longModelName, contextWindow: 200000, suggestedInput: ['text'] }] }, () => {}]
-  if (index === 5) return [0, () => {}]
+  if (index === 1) return [{ key: pickerCacheKey, models: [{ id: 'deepseek-reasoner-preview-2026-long-context', name: longModelName, contextWindow: 200000, suggestedInput: ['text'] }] }, () => {}]
+  if (index === 4) return [0, () => {}]
   return defaultUseState(initial)
 }
 const pickerTree = plugin.__test.ConfigPane({ draft: pickerDraft, row: null, mode: 'edit', catalog: [], onChange: (next) => { selectedRowDraft = next } })
@@ -549,13 +561,34 @@ function collectNodes(node, out = []) {
 }
 const pickerNodes = collectNodes(pickerTree)
 assert.ok(pickerNodes.includes(longModelName), 'full long model name is visible in the row picker')
+assert.ok(pickerNodes.includes('获取模型'), 'top fetch control is labeled 获取模型')
+assert.ok(pickerNodes.includes('选择'), 'existing rows retain a model selection control')
+assert.ok(!pickerNodes.includes('从端点拉取模型'), 'duplicate bulk discovery panel is absent')
+assert.ok(!pickerNodes.includes('批量导入'), 'duplicate bulk-import control is absent')
 assert.ok(pickerNodes.some((node) => node?.props?.name === 'trash'), 'model removal uses a trash icon')
 const longNameNode = pickerNodes.find((node) => node?.type === 'span' && node?.props?.children?.includes(longModelName))
 assert.equal(longNameNode?.props?.style?.whiteSpace, 'normal', 'long model names wrap in the picker')
 const modelOption = pickerNodes.find((node) => node?.type === 'button' && node?.props?.role === 'option')
+const contextInput = pickerNodes.find((node) => node?.type === 'input' && node?.props?.['aria-label'] === '第 1 行上下文窗口')
+contextInput.props.onChange({ target: { value: '1m' } })
+assert.equal(selectedRowDraft.models[0].contextWindow, '1m', 'unit suffix survives text input before saving')
 modelOption.props.onClick()
 assert.equal(selectedRowDraft.models[0].id, 'deepseek-reasoner-preview-2026-long-context')
 assert.equal(selectedRowDraft.models[0].contextWindow, 200000)
+hookIndex = 0
+selectedRowDraft = null
+React.useState = (initial) => {
+  const index = hookIndex++
+  if (index === 1) return [{ key: pickerCacheKey, models: [{ id: 'deepseek-reasoner-preview-2026-long-context', name: longModelName, contextWindow: 200000, suggestedInput: ['text'] }] }, () => {}]
+  if (index === 4) return [-1, () => {}]
+  return defaultUseState(initial)
+}
+const topPickerTree = plugin.__test.ConfigPane({ draft: pickerDraft, row: null, mode: 'edit', catalog: [], onChange: (next) => { selectedRowDraft = next } })
+React.useState = defaultUseState
+const topOption = collectNodes(topPickerTree).find((node) => node?.type === 'button' && node?.props?.role === 'option')
+topOption.props.onClick()
+assert.equal(selectedRowDraft.models.length, 2, 'top picker adds a model without replacing the current row')
+assert.equal(selectedRowDraft.models[1].id, 'deepseek-reasoner-preview-2026-long-context')
 console.log('ok  model picker shows long names in a full-width panel')
 
 for (const dispose of disposers) dispose()
