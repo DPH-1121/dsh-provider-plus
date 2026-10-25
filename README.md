@@ -8,6 +8,10 @@
 
 见 [**DSH 插件安装教程**](https://github.com/DPH-1121/dsh-plugins/blob/main/docs/install.md)。
 
+## 兼容性
+
+基线 **dsh `0.2.1-rc.3`**：清单通过 rc.3 的插件闸门、可装入隔离 profile 并 `--dump-config` 组合成功，`npm run test`（smoke）通过；`engines.dsh` 同时保留 `0.1.6` 起的旧窗口。
+
 ## 其他 DSH 插件
 
 - [dsh-opencode-go-plus](https://github.com/DPH-1121/dsh-opencode-go-plus) —— 用 OpenCode Go 订阅模型，自动适配网关新模型并显示套餐额度。
