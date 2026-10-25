@@ -465,11 +465,10 @@ assert.deepEqual(
   registrations.map((entry) => [entry.name, entry.id ?? entry.key]),
   [
     ['settings.section', 'provider-plus'],
-    ['settings.models.provider-card', 'llm-pi-ai'],
     ['conversation.input.activity', undefined],
   ],
 )
-console.log('ok  client registers the workbench page, the provider-card strip and the composer usage chip')
+console.log('ok  client registers the workbench page and the composer usage chip')
 
 /* The card-first ConfigPane passes each control as the second argument to
    LField; a plain-function call that drops it silently removes every input.
@@ -529,6 +528,10 @@ assert.equal(plugin.__test.formatContextWindowInput(128000), '128k')
 assert.equal(plugin.__test.modelsForSave({ models: [{ id: 'window-test', name: '', contextWindow: '1m', image: false }] })[0].contextWindow, 1000000)
 assert.equal(plugin.__test.duplicateModelId([{ id: 'model-a' }, { id: ' model-a ' }]), 'model-a')
 assert.equal(plugin.__test.duplicateModelId([{ id: 'model-a' }, { id: 'model-b' }]), null)
+assert.equal(plugin.__test.usageRowPercent({ label: '5 小时已用%', value: 3 }), 3)
+assert.equal(plugin.__test.usageRowPercent({ label: '5 小时已用%', value: '81.5' }), 81.5)
+assert.equal(plugin.__test.usageRowPercent({ label: '月额度剩余', value: 8.78, unit: '$' }), null)
+assert.equal(plugin.__test.usageRowValue({ label: '月额度剩余', value: 8.78, unit: '$' }), '$8.78')
 console.log('ok  context-window inputs accept K/M units and reject invalid values')
 
 /* A row picker must expose a full-width option with its complete long name,
