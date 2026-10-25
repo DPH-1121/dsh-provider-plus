@@ -442,6 +442,7 @@ const React = {
   createElement: (type, props, ...children) => ({ type, props: { ...(props ?? {}), children } }),
   Fragment: 'fragment',
   useState: (value) => [value, () => {}],
+  useRef: (value) => ({ current: value }),
   useEffect: () => {},
   useMemo: (fn) => fn(),
   memo: (fn) => fn,
@@ -517,6 +518,45 @@ assert.deepEqual(selectedModels, [
 ])
 assert.deepEqual(originalModels[0], { id: 'old', name: 'Old', contextWindow: 1000, image: false })
 console.log('ok  selecting an endpoint model fills only the chosen row')
+
+/* A row picker must expose a full-width option with its complete long name,
+   and the destructive action should use a recognizable trash icon. */
+const longModelName = 'DeepSeek Reasoner Preview 2026 Experimental Long Context Edition'
+const pickerDraft = {
+  provider: 'demo-gw', displayName: 'Demo', api: 'openai-completions',
+  baseURL: 'http://127.0.0.1:9999/v1', apiKeyEnv: '', headersText: '', apiKey: '',
+  models: [{ id: 'old', name: 'Old', contextWindow: 1000, image: false }],
+}
+const pickerCacheKey = JSON.stringify([pickerDraft.provider, pickerDraft.baseURL, pickerDraft.apiKeyEnv, pickerDraft.headersText, pickerDraft.apiKey])
+const defaultUseState = React.useState
+let hookIndex = 0
+let selectedRowDraft = null
+React.useState = (initial) => {
+  const index = hookIndex++
+  if (index === 2) return [{ key: pickerCacheKey, models: [{ id: 'deepseek-reasoner-preview-2026-long-context', name: longModelName, contextWindow: 200000, suggestedInput: ['text'] }] }, () => {}]
+  if (index === 5) return [0, () => {}]
+  return defaultUseState(initial)
+}
+const pickerTree = plugin.__test.ConfigPane({ draft: pickerDraft, row: null, mode: 'edit', catalog: [], onChange: (next) => { selectedRowDraft = next } })
+React.useState = defaultUseState
+function collectNodes(node, out = []) {
+  if (node === null || node === undefined) return out
+  if (Array.isArray(node)) { for (const item of node) collectNodes(item, out); return out }
+  if (typeof node !== 'object') { out.push(node); return out }
+  out.push(node)
+  collectNodes(node.props?.children, out)
+  return out
+}
+const pickerNodes = collectNodes(pickerTree)
+assert.ok(pickerNodes.includes(longModelName), 'full long model name is visible in the row picker')
+assert.ok(pickerNodes.some((node) => node?.props?.name === 'trash'), 'model removal uses a trash icon')
+const longNameNode = pickerNodes.find((node) => node?.type === 'span' && node?.props?.children?.includes(longModelName))
+assert.equal(longNameNode?.props?.style?.whiteSpace, 'normal', 'long model names wrap in the picker')
+const modelOption = pickerNodes.find((node) => node?.type === 'button' && node?.props?.role === 'option')
+modelOption.props.onClick()
+assert.equal(selectedRowDraft.models[0].id, 'deepseek-reasoner-preview-2026-long-context')
+assert.equal(selectedRowDraft.models[0].contextWindow, 200000)
+console.log('ok  model picker shows long names in a full-width panel')
 
 for (const dispose of disposers) dispose()
 gateway.close()
