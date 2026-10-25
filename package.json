@@ -1,6 +1,6 @@
 {
   "name": "dsh-provider-plus",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "dsh-provider-plus（模型增强）for DeepSeek Harness: a provider workbench that declares image input, custom gateway headers (x-opencode-session and friends), model discovery, connectivity probes, usage tests and a composer usage overview.",
   "type": "module",
   "license": "MIT",
