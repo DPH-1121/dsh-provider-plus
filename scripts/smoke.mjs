@@ -470,6 +470,35 @@ assert.deepEqual(
 )
 console.log('ok  client registers the workbench page, the provider-card strip and the composer usage chip')
 
+/* The card-first ConfigPane passes each control as the second argument to
+   LField; a plain-function call that drops it silently removes every input.
+   Render the pane with the stub React and count the controls. */
+const paneTree = plugin.__test.ConfigPane({
+  draft: {
+    provider: '',
+    displayName: '',
+    baseURL: '',
+    api: 'openai-completions',
+    apiKeyEnv: '',
+    headersText: '',
+    apiKey: '',
+    models: [],
+  },
+  row: null,
+  mode: 'create',
+  catalog: [],
+  onChange: () => {},
+})
+function countInputs(node) {
+  if (node === null || node === undefined) return 0
+  if (Array.isArray(node)) return node.reduce((sum, item) => sum + countInputs(item), 0)
+  if (typeof node !== 'object') return 0
+  const children = node.props && node.props.children
+  return (node.type === 'input' ? 1 : 0) + (children === undefined ? 0 : countInputs(children))
+}
+assert.ok(countInputs(paneTree) >= 3, 'config pane renders ID, name and baseURL inputs')
+console.log('ok  config pane renders its basic-info inputs')
+
 for (const dispose of disposers) dispose()
 gateway.close()
 console.log('\nall smoke checks passed')
