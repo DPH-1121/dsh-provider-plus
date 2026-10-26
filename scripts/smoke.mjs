@@ -301,6 +301,35 @@ assert.deepEqual(discoverBody.models[0].suggestedInput, ['text', 'image'])
 assert.deepEqual(discoverBody.models[1].suggestedInput, ['text'])
 console.log('ok  discovery normalizes data[] and hints vision ids')
 
+/* a pasted ".../models" URL is stored as its root; a 404 is a failed fetch */
+const suffixSaved = await callRoute(routes, '/provider', {
+  method: 'POST',
+  body: {
+    provider: 'demo-suffix',
+    displayName: 'Suffix',
+    api: 'openai-completions',
+    baseURL: `${gatewayURL}/models`,
+    apiKeyEnv: 'DEMO_KEY',
+    models: [{ id: 'vendor/plain-1', name: 'Plain One' }],
+  },
+})
+const suffixRow = suffixSaved.json().providers.find((entry) => entry.provider === 'demo-suffix')
+assert.equal(suffixRow.baseURL, gatewayURL, 'the /models suffix is stripped when saving')
+const suffixDiscover = await callRoute(routes, '/discover', { method: 'POST', body: { provider: 'demo-suffix' } })
+assert.equal(suffixDiscover.json().ok, true)
+assert.equal(suffixDiscover.json().models.length, 2)
+
+const failedDiscover = await callRoute(routes, '/discover', {
+  method: 'POST',
+  body: { provider: 'demo-gw', baseURL: `${gatewayURL}/nope` },
+})
+const failedBody = failedDiscover.json()
+assert.equal(failedBody.ok, false, 'a non-2xx listing is not a success')
+assert.equal(failedBody.status, 404)
+assert.match(failedBody.message, /404/)
+assert.equal(failedBody.models.length, 0)
+console.log('ok  discovery accepts a /models URL and reports a non-2xx as failure')
+
 /* connectivity probe */
 const probed = await callRoute(routes, '/probe', { method: 'POST', body: { provider: 'demo-gw' } })
 const probeBody = probed.json()
