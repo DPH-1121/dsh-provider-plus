@@ -230,7 +230,9 @@ assert.equal(stateBody.providers[0].keyConfigured, true)
 assert.equal(stateBody.providers[0].imageModels, 1)
 assert.equal(stateBody.providers[0].origin, 'composition')
 assert.equal(stateBody.providers[0].deletable, false)
-console.log('ok  state merges the composition layer and marks it non-deletable')
+const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
+assert.equal(stateBody.version, manifest.version, 'state carries the package version')
+console.log('ok  state merges the composition layer, marks it non-deletable and carries the version')
 
 /* loopback guard */
 const denied = await callRoute(routes, '/state', { address: '10.0.0.8' })
