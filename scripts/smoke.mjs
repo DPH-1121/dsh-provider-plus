@@ -162,8 +162,10 @@ async function callRoute(routes, path, init) {
 
 /* ------------------------------------------------------------------ gateway  */
 
-const gateway = http.createServer((req, res) => {
-  if (req.url === '/v1/models' || req.url === '/models') {
+/** Headers the last `/echo/models` call carried, so a test can inspect the wire. */
+let lastEchoHeaders = null
+
+const gateway = http.createServer((req, res) => {  if (req.url === '/v1/models' || req.url === '/models') {
     res.writeHead(200, { 'content-type': 'application/json' })
     res.end(
       JSON.stringify({
@@ -173,6 +175,12 @@ const gateway = http.createServer((req, res) => {
         ],
       }),
     )
+    return
+  }
+  if (req.url === '/echo/models') {
+    lastEchoHeaders = req.headers
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ data: [] }))
     return
   }
   if (req.url === '/credits' && req.method === 'GET') {
@@ -329,6 +337,55 @@ assert.equal(failedBody.status, 404)
 assert.match(failedBody.message, /404/)
 assert.equal(failedBody.models.length, 0)
 console.log('ok  discovery accepts a /models URL and reports a non-2xx as failure')
+
+/* a `{uuid}` placeholder is expanded before it reaches the wire, not sent raw */
+await callRoute(routes, '/discover', {
+  method: 'POST',
+  body: { provider: 'demo-echo', baseURL: `${gatewayURL}/echo`, headers: { 'x-opencode-session': '{uuid}' } },
+})
+const echoedSession = lastEchoHeaders?.['x-opencode-session']
+assert.equal(typeof echoedSession, 'string', 'the session header was sent')
+assert.equal(echoedSession.includes('{uuid}'), false, 'the placeholder is not sent literally')
+assert.match(echoedSession, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, 'it is a real uuid')
+console.log('ok  discovery expands {uuid} in a header before sending')
+
+/* a gateway that hard-requires its session header gets one filled in on save */
+const sessionSaved = await callRoute(routes, '/provider', {
+  method: 'POST',
+  body: {
+    provider: 'demo-session',
+    displayName: 'Session',
+    api: 'openai-completions',
+    baseURL: 'https://opencode.ai/zen/go/v1',
+    apiKeyEnv: 'DEMO_KEY',
+    models: [{ id: 'vendor/plain-1', name: 'Plain One' }],
+  },
+})
+assert.equal(sessionSaved.status, 200)
+const sessionRow = sessionSaved.json().providers.find((entry) => entry.provider === 'demo-session')
+const filledSession = sessionRow?.headers?.['x-opencode-session']
+assert.equal(typeof filledSession, 'string', 'the required header was added without being asked')
+assert.equal(filledSession.includes('{uuid}'), false, 'it is stored expanded')
+assert.match(filledSession, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, 'as a stable uuid')
+
+/* a value the user already set wins, whatever its casing */
+const keptSaved = await callRoute(routes, '/provider', {
+  method: 'POST',
+  body: {
+    provider: 'demo-session-kept',
+    displayName: 'Session Kept',
+    api: 'openai-completions',
+    baseURL: 'https://opencode.ai/zen/go/v1',
+    apiKeyEnv: 'DEMO_KEY',
+    headers: { 'X-OpenCode-Session': 'my-own-session' },
+    models: [{ id: 'vendor/plain-1', name: 'Plain One' }],
+  },
+})
+const keptRow = keptSaved.json().providers.find((entry) => entry.provider === 'demo-session-kept')
+assert.equal(keptRow.headers['X-OpenCode-Session'], 'my-own-session', 'an explicit value is left alone')
+assert.equal(keptRow.headers['x-opencode-session'], undefined, 'no duplicate header is added')
+console.log('ok  the required session header is filled in, and a user value wins')
+
 
 /* connectivity probe */
 const probed = await callRoute(routes, '/probe', { method: 'POST', body: { provider: 'demo-gw' } })
