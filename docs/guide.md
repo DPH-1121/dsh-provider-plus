@@ -70,9 +70,11 @@ $DSH_HOME/storages/dsh-provider-plus/usage.json
 
 1. **不写协议代码**。所有请求仍由官方 `@deepseek-ai/dsh-llm-pi-ai` 发出，图片/工具/重试/replay 的行为与官方一致。
 2. **不改内置页**。两个 Slot 都是追加：`settings.section`（新页面）和 `settings.models.provider-card`（卡片下方的小条）。卸载本插件，内置页恢复原样。
-3. **provider 删除**走 `settings.mutate('llm-pi-ai', [{ op: 'unset', path: ['providers', '<id>'] }])`：`update` + `null` 会被配置校验拒掉（“resolves no models”），只有路径 unset 才能把键删掉。删完再按**实际效果**复查一次 —— 组合层（`cordis.patch.yml`）声明的 provider 删不掉，会返回 409 并说明原因。
+3. **provider 删除**走 `settings.mutate('llm-pi-ai', [{ op: 'unset', path: ['providers', '<id>'] }])`：`update` + `null` 会被配置校验拒掉（“resolves no models”），只有路径 unset 才能把键删掉。删完再按**实际效果**复查一次 —— 组合层（`cordis.patch.yml`）声明的 provider 删不掉，会返回 409 并说明原因。删除成功时同时释放它独占的**凭据引用**（`credentials.unset`，只删插件托管的那份，环境变量回退仍然有效）；若另一个 provider 还引用同一个名字，则保留。
 4. **请求头是静态的**。`{uuid}` 在保存时展开，所以同一 provider 的所有会话共用一个 session id。OpenCode Go 官方建议按会话区分；要做到逐请求变化，得像 `dsh-opencode-go-plus` 那样自带适配器，不在本插件范围内。
-5. **不猜模型清单**：手写路由的 `models` 必须非空，和 pi-ai 对手写路由的要求一致；`pi-ai` 内置目录路由则允许留空（= 用目录全部模型），此时 `api`/`baseURL` 也不能写，否则会被降级成手写路由。工作台在保存空模型表时会先向端点要一次列表并整份写入，所以不用手动凑一条。
+5. **不猜模型清单**：手写路由的 `models` 必须非空，和 pi-ai 对手写路由的要求一致；`pi-ai` 内置目录路由则允许留空（= 用目录全部模型），此时 `api`/`baseURL` 也不能写，否则会被降级成手写路由。工作台在保存空模型表时会先向端点要一次列表并整份写入，所以不用手动凑一条。**目录路由的保存不再回传 `api`/`baseURL`**（界面显示「沿用内置目录」），服务端也会忽略这两个字段，避免把 OpenAI OAuth、Copilot、Anthropic 这类内置 provider 改成手写路由。
+6. **写接口只接受同源 JSON**：`/provider`、`/models`、`/discover`、`/probe`、`/usage` 除了 loopback 来源，还要求 `Origin` 为空（非浏览器调用）或与本机同源，且 POST 必须是 `application/json`。这是防 CSRF 的两道闸：任意网页都能访问 127.0.0.1，但伪造不了 `Origin`，也发不出免预检的 JSON 请求。
+7. **端点白名单**：`/discover`、`/probe` 与用量查询会拒绝云元数据/链路本地地址（`169.254.0.0/16`、`100.100.100.200`、`metadata.google.internal` 等），本机回环网关（LM Studio、Ollama）仍然可用。
 
 ## 自检
 
@@ -80,4 +82,4 @@ $DSH_HOME/storages/dsh-provider-plus/usage.json
 npm run check   # node scripts/smoke.mjs
 ```
 
-覆盖：state 汇总 / 非 loopback 拒绝 / provider 写入（含 `{uuid}` 展开）/ 内联 API Key 写入凭据存储且不进配置 / 缺引用名时拒绝 / 模型发现归一化与视觉预勾 / 连通性探测 / 用量模板取值 / used+cap 换算成百分比并保留单位 / 用量配置持久化 / 删除 / 非法输入 / client 半真的注册了两个 Slot。
+覆盖：state 汇总 / 非 loopback 拒绝 / provider 写入（含 `{uuid}` 展开）/ 内联 API Key 写入凭据存储且不进配置 / 缺引用名时拒绝 / 模型发现归一化与视觉预勾 / 连通性探测 / 用量模板取值 / used+cap 换算成百分比并保留单位 / 用量配置持久化 / 删除 / 非法输入 / 跨源写入拒绝 / 非 JSON 写入拒绝 / 目录路由不回写协议与端点 / 删除释放凭据（共享引用保留）/ 400·413·404 语义 / 非法用量模板拒绝 / 元数据端点拒绝 / client 半真的注册了两个 Slot。

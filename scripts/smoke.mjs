@@ -122,11 +122,12 @@ function makeHarness(initial, composition = {}, directory = []) {
   return { ctx, routes, store, accesses, configEditor, llm, disposers, credentials: credentialStore }
 }
 
-function fakeReq({ method = 'GET', url = '/', body, address = '127.0.0.1' }) {
-  const text = body === undefined ? '' : JSON.stringify(body)
+function fakeReq({ method = 'GET', url = '/', body, raw, headers, address = '127.0.0.1' }) {
+  const text = raw !== undefined ? raw : body === undefined ? '' : JSON.stringify(body)
   return {
     method,
     url,
+    headers: { ...(text.length > 0 ? { 'content-type': 'application/json' } : {}), ...(headers ?? {}) },
     socket: { remoteAddress: address },
     async *[Symbol.asyncIterator]() {
       if (text.length > 0) yield Buffer.from(text, 'utf8')
@@ -156,7 +157,17 @@ async function callRoute(routes, path, init) {
   const route = routes.get(`/plugins/dsh-provider-plus${path.split('?')[0]}`)
   assert.ok(route, `route ${path} registered`)
   const res = fakeRes()
-  await route.handler(fakeReq({ method: init?.method ?? 'GET', url: init?.url ?? path, body: init?.body, address: init?.address }), res)
+  await route.handler(
+    fakeReq({
+      method: init?.method ?? 'GET',
+      url: init?.url ?? path,
+      body: init?.body,
+      raw: init?.raw,
+      headers: init?.headers,
+      address: init?.address,
+    }),
+    res,
+  )
   return res
 }
 
@@ -510,6 +521,123 @@ const bad = await callRoute(routes, '/provider', { method: 'POST', body: { provi
 assert.equal(bad.status, 400)
 console.log('ok  invalid provider ids are refused')
 
+/* ---------------------------------------------------------------- hardening */
+
+/* A page the user visits can reach loopback, but it cannot forge Origin. */
+const forged = await callRoute(routes, '/provider', {
+  method: 'POST',
+  body: { provider: 'csrf-target', baseURL: gatewayURL, models: [{ id: 'vendor/plain-1' }] },
+  headers: { origin: 'https://evil.example', 'content-type': 'text/plain' },
+})
+assert.equal(forged.status, 403)
+assert.equal(forged.json().error, 'cross-origin-request')
+assert.equal(store['llm-pi-ai']?.providers?.['csrf-target'], undefined, 'nothing was written')
+console.log('ok  a cross-origin write is refused before it reaches settings')
+
+/* The app's own page is same-origin, so its writes still pass. */
+const sameOrigin = await callRoute(routes, '/provider', {
+  method: 'POST',
+  body: { provider: 'csrf-ok', displayName: 'Same Origin', baseURL: gatewayURL, apiKeyEnv: 'DEMO_KEY', models: [{ id: 'vendor/plain-1' }] },
+  headers: { origin: 'http://127.0.0.1:60243', host: '127.0.0.1:60243' },
+})
+assert.equal(sameOrigin.status, 200)
+console.log('ok  a same-origin JSON write is accepted')
+
+/* A non-JSON content type cannot be sent cross-origin without a preflight. */
+const plainType = await callRoute(routes, '/provider', {
+  method: 'POST',
+  body: { provider: 'text-target', baseURL: gatewayURL, models: [{ id: 'vendor/plain-1' }] },
+  headers: { 'content-type': 'text/plain' },
+})
+assert.equal(plainType.status, 415)
+console.log('ok  a non-JSON write is refused')
+
+/* A catalog row never copies its protocol or endpoint into the user layer. */
+const catalogWrite = await callRoute(routes, '/provider', {
+  method: 'POST',
+  body: {
+    provider: 'opencode-go',
+    displayName: 'OpenCode Go',
+    api: 'openai-completions',
+    baseURL: 'https://evil.example/v1',
+    apiKeyEnv: 'DEMO_KEY',
+    models: [],
+  },
+})
+assert.equal(catalogWrite.status, 200)
+const catalogStored = store['llm-pi-ai'].providers['opencode-go']
+assert.equal(catalogStored.api, undefined, 'the catalog protocol was not restated')
+assert.equal(catalogStored.baseURL, undefined, 'the catalog endpoint was not copied')
+console.log('ok  a catalog row keeps pi-ai protocol and endpoint even when the request restates them')
+
+/* Deleting a provider releases the credential reference it owned. */
+const withKey = await callRoute(routes, '/provider', {
+  method: 'POST',
+  body: {
+    provider: 'demo-release',
+    displayName: 'Release',
+    baseURL: gatewayURL,
+    apiKeyEnv: 'RELEASE_KEY',
+    apiKey: 'sk-release-me',
+    models: [{ id: 'vendor/plain-1' }],
+  },
+})
+assert.equal(withKey.status, 200)
+assert.equal(credentialStore.get('RELEASE_KEY'), 'sk-release-me')
+const released = await callRoute(routes, '/provider?provider=demo-release', { method: 'DELETE', url: '/provider?provider=demo-release' })
+assert.equal(released.status, 200)
+assert.equal(released.json().credentialCleared, 'RELEASE_KEY')
+assert.equal(credentialStore.has('RELEASE_KEY'), false, 'the orphaned reference is gone')
+console.log('ok  delete releases the credential it owned')
+
+/* …but a reference another provider still names is left alone. */
+for (const name of ['demo-share-a', 'demo-share-b']) {
+  await callRoute(routes, '/provider', {
+    method: 'POST',
+    body: { provider: name, baseURL: gatewayURL, apiKeyEnv: 'SHARED_KEY', apiKey: 'sk-shared', models: [{ id: 'vendor/plain-1' }] },
+  })
+}
+const sharedDelete = await callRoute(routes, '/provider?provider=demo-share-a', { method: 'DELETE', url: '/provider?provider=demo-share-a' })
+assert.equal(sharedDelete.status, 200)
+assert.equal(sharedDelete.json().credentialCleared, null)
+assert.equal(credentialStore.get('SHARED_KEY'), 'sk-shared', 'a shared reference survives')
+console.log('ok  delete keeps a credential another provider still uses')
+
+/* Malformed and oversized bodies are caller errors, not server faults. */
+const malformed = await callRoute(routes, '/provider', { method: 'POST', raw: '{nope' })
+assert.equal(malformed.status, 400)
+const oversized = await callRoute(routes, '/provider', { method: 'POST', raw: JSON.stringify({ x: 'a'.repeat(600 * 1024) }) })
+assert.equal(oversized.status, 413)
+console.log('ok  malformed and oversized bodies answer 400/413')
+
+/* Unknown provider on the models route is a 404. */
+const missingModels = await callRoute(routes, '/models', { method: 'POST', body: { provider: 'nope-nope', models: [{ id: 'm' }] } })
+assert.equal(missingModels.status, 404)
+console.log('ok  a model write for an unknown provider answers 404')
+
+/* An invalid usage template is refused instead of being stored raw. */
+const badUsage = await callRoute(routes, '/usage', {
+  method: 'POST',
+  body: { provider: 'demo-usage-bad', config: { mode: 'http', url: `${gatewayURL}/usage`, interval: 5000 } },
+})
+assert.equal(badUsage.status, 400)
+assert.equal((await callRoute(routes, '/usage?provider=demo-usage-bad')).json().reason, 'not-configured')
+console.log('ok  an invalid usage template is refused, not persisted')
+
+/* Cloud metadata endpoints are refused before any socket is opened. */
+const metadata = await callRoute(routes, '/discover', {
+  method: 'POST',
+  body: { provider: 'demo-gw', baseURL: 'http://169.254.169.254/latest' },
+})
+assert.equal(metadata.json().ok, false)
+assert.equal(metadata.json().reason, 'blocked')
+const metadataUsage = await callRoute(routes, '/usage', {
+  method: 'POST',
+  body: { provider: 'demo-usage-bad', run: true, mode: 'http', url: 'http://169.254.169.254/latest/meta-data' },
+})
+assert.equal(metadataUsage.json().reason, 'blocked')
+console.log('ok  cloud metadata endpoints are refused')
+
 /* ------------------------------------------------------------------ client   */
 
 const clientSource = await readFile(join(root, 'lib', 'client.js'), 'utf8')
@@ -586,6 +714,20 @@ function countInputs(node) {
 }
 assert.ok(countInputs(paneTree) >= 3, 'config pane renders ID, name and baseURL inputs')
 console.log('ok  config pane renders its basic-info inputs')
+
+/* A catalog row drafts 沿用内置目录, so its protocol is never restated on save. */
+const catalogRowForDraft = {
+  provider: 'openai',
+  displayName: 'openai',
+  api: 'openai-completions',
+  baseURL: 'https://api.openai.com/v1',
+  apiKeyEnv: '',
+  headers: {},
+  models: [],
+}
+assert.equal(plugin.__test.draftFrom(catalogRowForDraft, true).api, '', 'catalog rows draft no protocol')
+assert.equal(plugin.__test.draftFrom(catalogRowForDraft, false).api, 'openai-completions', 'hand-written rows keep theirs')
+console.log('ok  a catalog row drafts 沿用内置目录 instead of restating its protocol')
 
 /* Choosing a model from the endpoint updates just the targeted row and keeps
    the editable fields in the same shape as a manually added model. */
