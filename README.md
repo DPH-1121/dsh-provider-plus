@@ -16,7 +16,11 @@
 
 ## 兼容性
 
-基线 **dsh `0.2.1-rc.5`**：清单通过 rc.5 的插件闸门、可装入隔离 profile 并 `--dump-config` 组合成功，`npm run test`（smoke，33 项）通过；`engines.dsh` 同时保留 `0.1.6` 起的旧窗口。
+基线 **dsh `0.2.1-rc.5`**：清单通过 rc.5 的插件闸门、可装入隔离 profile 并 `--dump-config` 组合成功，`npm run test`（smoke）通过；`engines.dsh` 同时保留 `0.1.6` 起的旧窗口。
+
+已在 **dsh `0.2.2-rc.1`** 上实测：清单通过插件闸门、可装入隔离 profile 并 `--dump-config` 组合成功，`/state`、`/provider`、`/models`、`/discover`、`/probe`、`/usage` 六条路由全部走通，设置页在真实浏览器里正常渲染。同一条代码在 `0.2.1-rc.5`／`0.2.1-rc.2` 上也验证过。
+
+`0.2.2` 给 `llm-pi-ai` 的路由新增了 `maxRequestImages` / `imageOffloadCountQuantum`（单次请求图片数与每次卸载张数）。这两个字段由本插件补进编辑器——内置的「模型」页并不提供它们。是否显示不靠版本号判断，而是读 `settings.describe()` 里 `llm-pi-ai` 的真实 schema：新版显示并写入，旧版隐藏且拒写，保存后提示「当前 dsh 的 llm-pi-ai 不支持…」。其余路由选项保持原样，不会被改写。
 
 ## 其他 DSH 插件
 

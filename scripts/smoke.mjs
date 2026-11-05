@@ -44,14 +44,35 @@ function deepMerge(target, patch) {
   return next
 }
 
-function makeHarness(initial, composition = {}, directory = []) {
+function makeHarness(initial, composition = {}, directory = [], routeFieldNames = []) {
   const store = { ...initial }
   const routes = new Map()
   const accesses = []
+  // The adapter's route schema in the *projected* shape `settings.describe()`
+  // really returns: a root node referencing others by integer id.
+  const routeSchema = Object.fromEntries(routeFieldNames.map((field, index) => [field, 100 + index]))
+  const nodeRefs = Object.fromEntries(routeFieldNames.map((field, index) => [String(100 + index), { type: 'any', meta: {} }]))
   const settings = {
     get: (ns) => store[ns],
     describe: () => [
       { ns: 'provider-plus', value: store['provider-plus'] ?? { usage: {} }, autoGenerate: false, schema: {}, revision: 1, applies: 'live' },
+      {
+        ns: 'llm-pi-ai',
+        value: store['llm-pi-ai'] ?? {},
+        autoGenerate: false,
+        schema: {
+          uid: 2,
+          refs: {
+            ...nodeRefs,
+            2: { type: 'object', meta: { default: {} }, dict: { providers: 3 } },
+            3: { type: 'dict', meta: { default: {} }, inner: 4, sKey: 5 },
+            4: { type: 'object', meta: { default: {} }, dict: routeSchema },
+            5: { type: 'string', meta: {} },
+          },
+        },
+        revision: 1,
+        applies: 'live',
+      },
     ],
     configure: () => () => {},
     update: async (ns, patch) => {
@@ -202,6 +223,17 @@ const gateway = http.createServer((req, res) => {  if (req.url === '/v1/models' 
   if (req.url === '/usage' && req.method === 'GET') {
     res.writeHead(200, { 'content-type': 'application/json' })
     res.end(JSON.stringify({ data: { used: 42, limit: 100, windows: [{ percent: 42 }], limits: [{ unit: 3, percentage: 12 }, { unit: 6, percentage: 34 }] } }))
+    return
+  }
+  if (req.url === '/doc-models' && req.method === 'GET') {
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ object: 'list', data: [{ id: 'a' }, { id: 'b' }] }))
+    return
+  }
+  if (req.url === '/portal-only' && req.method === 'GET') {
+    /* Mirrors Deploy: authenticated, but the body shape is portal-session only. */
+    res.writeHead(400, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ status_code: 400, message: 'Invalid payload' }))
     return
   }
   res.writeHead(404, { 'content-type': 'application/json' })
@@ -476,6 +508,56 @@ assert.deepEqual(percentBody.rows, [
 ])
 console.log('ok  used/cap pairs become percentages and keep their unit')
 
+/* documented facts ride along with live rows, and a bare array counts its rows */
+const factsRun = await callRoute(routes, '/usage', {
+  method: 'POST',
+  body: {
+    provider: 'demo-gw',
+    run: true,
+    mode: 'http',
+    url: `${gatewayURL}/doc-models`,
+    method: 'GET',
+    keyRef: 'DEMO_KEY',
+    headers: { authorization: 'Bearer {key}' },
+    extract: [{ label: '可用模型数', path: 'data' }],
+    facts: [
+      { label: '默认限速', value: 5, unit: 'req/s', note: '官方文档' },
+      { label: '输入价', value: 0.1, unit: '$' },
+    ],
+  },
+})
+const factsBody = factsRun.json()
+assert.equal(factsBody.ok, true)
+assert.deepEqual(factsBody.rows, [
+  { label: '可用模型数', value: 2 },
+  { label: '默认限速', value: 5, unit: 'req/s', note: '官方文档', source: 'doc' },
+  { label: '输入价', value: 0.1, unit: '$', source: 'doc' },
+])
+console.log('ok  a bare array counts its rows and documented facts follow the live rows')
+
+/* a portal-only route still shows the documented facts instead of an empty panel */
+const portalRun = await callRoute(routes, '/usage', {
+  method: 'POST',
+  body: {
+    provider: 'demo-gw',
+    run: true,
+    mode: 'http',
+    url: `${gatewayURL}/portal-only`,
+    method: 'GET',
+    keyRef: 'DEMO_KEY',
+    headers: { authorization: 'Bearer {key}' },
+    extract: [{ label: '剩余额度', path: 'balance' }],
+    facts: [{ label: '默认限速', value: 5, unit: 'req/s' }],
+  },
+})
+const portalBody = portalRun.json()
+assert.equal(portalBody.ok, false)
+assert.equal(portalBody.status, 400)
+assert.match(portalBody.message, /Invalid payload/)
+assert.match(portalBody.message, /API Key 拿不到账户额度/)
+assert.deepEqual(portalBody.rows, [{ label: '默认限速', value: 5, unit: 'req/s', source: 'doc' }])
+console.log('ok  a portal-only 400 explains itself and keeps the documented facts')
+
 /* delete */
 const deleted = await callRoute(routes, '/provider?provider=demo-gw', { method: 'DELETE', url: '/provider?provider=demo-gw' })
 assert.equal(deleted.status, 200)
@@ -638,6 +720,86 @@ const metadataUsage = await callRoute(routes, '/usage', {
 assert.equal(metadataUsage.json().reason, 'blocked')
 console.log('ok  cloud metadata endpoints are refused')
 
+/* -------------------------------------------------- version-drift adapters */
+/*
+ * 0.2.2 added `maxRequestImages` / `imageOffloadCountQuantum` to the pi-ai
+ * route profile. The page must offer them only where the installed adapter
+ * declares them, and must never write a value the adapter would ignore.
+ */
+{
+  const modern = makeHarness(
+    {},
+    {},
+    [],
+    ['displayName', 'api', 'baseURL', 'models', 'maxRequestImages', 'imageOffloadCountQuantum'],
+  )
+  apply(modern.ctx)
+  const state = (await callRoute(modern.routes, '/state')).json()
+  assert.ok(state.routeFields.includes('maxRequestImages'), 'a 0.2.2 route schema reports the image-count limit')
+  assert.ok(state.routeFields.includes('imageOffloadCountQuantum'))
+
+  const saved = await callRoute(modern.routes, '/provider', {
+    method: 'POST',
+    body: {
+      provider: 'limits-gw',
+      baseURL: 'https://limits.example/v1',
+      apiKeyEnv: 'DEMO_KEY',
+      models: [{ id: 'm1', name: 'M1', input: ['text', 'image'] }],
+      maxRequestImages: 40,
+      imageOffloadCountQuantum: 5,
+    },
+  })
+  assert.equal(saved.status, 200)
+  assert.equal(saved.json().warning, undefined, 'a supported limit saves without a warning')
+  const limits = modern.store['llm-pi-ai'].providers['limits-gw']
+  assert.equal(limits.maxRequestImages, 40)
+  assert.equal(limits.imageOffloadCountQuantum, 5)
+  // The editor reopens from state, so the saved limits must be echoed back.
+  const savedRow = saved.json().providers.find((entry) => entry.provider === 'limits-gw')
+  assert.equal(savedRow.maxRequestImages, 40, 'saved limits are echoed back for the editor')
+  assert.equal(savedRow.imageOffloadCountQuantum, 5)
+  console.log('ok  a 0.2.2 adapter saves the per-route image limits')
+
+  /* The same form posted at an older adapter must not persist the fields. */
+  const legacy = makeHarness({}, {}, [], ['displayName', 'api', 'baseURL', 'models'])
+  apply(legacy.ctx)
+  const legacyState = (await callRoute(legacy.routes, '/state')).json()
+  assert.deepEqual(legacyState.routeFields.filter((field) => field === 'maxRequestImages'), [])
+  const legacySave = await callRoute(legacy.routes, '/provider', {
+    method: 'POST',
+    body: {
+      provider: 'limits-gw',
+      baseURL: 'https://limits.example/v1',
+      apiKeyEnv: 'DEMO_KEY',
+      models: [{ id: 'm1', name: 'M1', input: ['text'] }],
+      maxRequestImages: 40,
+      imageOffloadCountQuantum: 5,
+    },
+  })
+  assert.equal(legacySave.status, 200)
+  const legacyProfile = legacy.store['llm-pi-ai'].providers['limits-gw']
+  assert.equal(legacyProfile.maxRequestImages, undefined, 'an unsupported limit is not written')
+  assert.equal(legacyProfile.imageOffloadCountQuantum, undefined)
+  assert.match(legacySave.json().warning, /单次请求图片数上限/)
+  console.log('ok  an older adapter drops the limits and says so instead of saving them')
+
+  // Each mounted harness owns a minute-level usage timer; dispose it so the
+  // process can exit once the checks are done.
+  for (const harness of [modern, legacy]) {
+    for (const dispose of harness.disposers) dispose()
+  }
+}
+
+/* a harness with no pi-ai schema at all must still serve state */
+{
+  const bare = makeHarness({}, {}, [])
+  apply(bare.ctx)
+  const state = (await callRoute(bare.routes, '/state')).json()
+  assert.deepEqual(state.routeFields, [])
+  for (const dispose of bare.disposers) dispose()
+  console.log('ok  a runtime that publishes no route schema hides the optional limits')
+}
+
 /* ------------------------------------------------------------------ client   */
 
 const clientSource = await readFile(join(root, 'lib', 'client.js'), 'utf8')
@@ -657,7 +819,9 @@ assert.equal(loaded.id, 'dsh-provider-plus')
 const React = {
   createElement: (type, props, ...children) => ({ type, props: { ...(props ?? {}), children } }),
   Fragment: 'fragment',
-  useState: (value) => [value, () => {}],
+  // React calls a function argument once to get the initial state; a stub that
+  // returned the function itself would hand every pane a config getter.
+  useState: (value) => [typeof value === 'function' ? value() : value, () => {}],
   useRef: (value) => ({ current: value }),
   useEffect: () => {},
   useMemo: (fn) => fn(),
@@ -729,6 +893,33 @@ assert.equal(plugin.__test.draftFrom(catalogRowForDraft, true).api, '', 'catalog
 assert.equal(plugin.__test.draftFrom(catalogRowForDraft, false).api, 'openai-completions', 'hand-written rows keep theirs')
 console.log('ok  a catalog row drafts 沿用内置目录 instead of restating its protocol')
 
+/* A saved Deploy template renders its documented facts in the usage pane, and
+   the pane offers an editor for them instead of dropping unknown config. The
+   editor lives in the collapsible request section, so open it for this render. */
+const baseUseState = React.useState
+React.useState = (value) => [typeof value === 'function' ? value() : value === false ? true : value, () => {}]
+const usagePaneTree = plugin.__test.UsagePane({
+  provider: 'deploy-portal',
+  baseURL: 'https://api-cdn.deploy.com/api/v1',
+  apiKeyEnv: 'deploy_portal',
+  initial: {
+    mode: 'http',
+    url: 'https://api-cdn.deploy.com/api/v1/models',
+    method: 'GET',
+    headers: { authorization: 'Bearer {key}' },
+    keyRef: 'deploy_portal',
+    interval: 0,
+    extract: [{ label: '可用模型数', path: 'data' }],
+    facts: [{ label: '默认限速', value: 5, unit: 'req/s', note: '官方文档' }],
+  },
+  initialResult: { at: new Date().toISOString(), ok: true, rows: [{ label: '默认限速', value: 5, unit: 'req/s' }], message: '' },
+})
+React.useState = baseUseState
+const paneText = JSON.stringify(usagePaneTree)
+assert.match(paneText, /官方文档固定值/)
+assert.match(paneText, /默认限速/)
+console.log('ok  the usage pane renders the documented facts and their editor')
+
 /* Choosing a model from the endpoint updates just the targeted row and keeps
    the editable fields in the same shape as a manually added model. */
 const originalModels = [
@@ -747,6 +938,29 @@ assert.deepEqual(selectedModels, [
 ])
 assert.deepEqual(originalModels[0], { id: 'old', name: 'Old', contextWindow: 1000, image: false })
 console.log('ok  selecting an endpoint model fills only the chosen row')
+
+/* The Deploy preset must point at a route a service key can actually call and
+   carry the published limits as facts, since no API-key quota route exists. */
+assert.ok(plugin.__test.USAGE_PRESET_TEMPLATES.some((entry) => entry.id === 'deploy'), 'deploy preset is offered')
+const deployFields = plugin.__test.usagePresetFields('deploy', 'https://api-cdn.deploy.com/api/v1', 'deploy_portal')
+assert.equal(deployFields.url, 'https://api-cdn.deploy.com/api/v1/models')
+assert.equal(deployFields.method, 'GET')
+assert.equal(deployFields.keyRef, 'deploy_portal')
+assert.match(deployFields.headersText, /Bearer \{key\}/)
+const factLabels = deployFields.facts.map((entry) => entry.label)
+assert.deepEqual(factLabels, ['默认限速', '限速状态码', '欠费状态码', '输入价', '输出价', '缓存读取价'])
+assert.equal(deployFields.facts[0].value, 5)
+assert.equal(deployFields.facts[0].unit, 'req/s')
+assert.deepEqual(
+  deployFields.extract.map((entry) => entry.label),
+  ['可用模型数', '接口状态'],
+)
+console.log('ok  the Deploy preset points at /models and states the published limits as facts')
+
+/* A Deploy card keeps its own key ref; an unrelated gateway gets the default. */
+assert.equal(plugin.__test.presetKeyRef('deploy', 'https://api-cdn.deploy.com/api/v1', 'deploy_portal'), 'deploy_portal')
+assert.equal(plugin.__test.presetKeyRef('deploy', 'https://other.example.com/v1', ''), 'DEPLOY_API_KEY')
+console.log('ok  the Deploy preset reuses the card key ref on a Deploy gateway')
 
 assert.equal(plugin.__test.parseContextWindow('1M'), 1000000)
 assert.equal(plugin.__test.parseContextWindow('1m'), 1000000)
